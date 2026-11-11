@@ -491,6 +491,7 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
 
     <!-- Analysis Issues -->
     <div class="analysis-box"><h3>🔍 การวิเคราะห์ปัญหาและข้อแนะนำ</h3><div class="issue-list" id="issueList"></div></div>
+    <div class="analysis-box nx-admin-only" id="mileCheckBox"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h3 style="margin:0">🛠️ ตรวจเลขไมล์ (เห็นเฉพาะผู้ดูแล) <span id="mileCheckCount" style="color:var(--red)"></span></h3><button class="action-btn green" style="padding:5px 11px;font-size:11px" onclick="exportMileCheck()">⬇️ Excel</button></div><div style="font-size:11px;color:var(--muted);margin-bottom:8px">ระยะทางในไฟล์เป็น 0 หรือเกิน 1,000 กม. — แดชบอร์ดใช้ค่าเฉลี่ยของทะเบียนแทน กรุณาตรวจการกรอกไมล์ออก/ไมล์เข้าในระบบต้นทาง</div><div id="mileCheckTable" style="max-height:340px;overflow:auto"></div></div>
   </div>
 
   <!-- ══ BOTTOM DC TABLE ══ -->
@@ -530,7 +531,7 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
 <div class="modal-overlay" id="uploadModal">
   <div class="modal">
     <h3>📁 โหลดไฟล์ข้อมูลใหม่</h3>
-    <div class="modal-body">อัพโหลด Excel (.xlsx) เพื่อดำเนินการ<br><strong style="color:var(--red)">⚠️ ข้อมูลปัจจุบันจะถูกแทนที่ทั้งหมดด้วยไฟล์ที่โหลดใหม่</strong></div>
+    <div class="modal-body">อัพโหลด Excel (.xlsx) เพื่อดำเนินการ<br><strong style="color:var(--red)">⚠️ เที่ยวที่มีเลขที่ใบรายการซ้ำจะใช้ค่าจากไฟล์ใหม่ เที่ยวใหม่ต่อท้ายข้อมูลเดิม</strong></div>
     <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">📂 คลิกหรือลากไฟล์ Excel มาวางที่นี่</div>
     <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFileUpload(event)">
     <div id="uploadProgress" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
@@ -716,6 +717,7 @@ function renderAll() {
   renderTeam();
   renderTrend();
   renderDCTable();
+  renderMileCheck();
   checkAlerts(filteredData);
   setStatus(`แสดง ${filteredData.length.toLocaleString()} / ${allData.length.toLocaleString()} เที่ยว`);
 }
@@ -1052,6 +1054,23 @@ function exportXLSX(){
   mkSheet([['วันที่','เที่ยวรวม','ระยะทาง(กม.)','ปกติ','เสี่ยง','ผิดปกติ'],...Object.keys(byDate).sort().map(d=>{const t=byDate[d];return [d,t.length,Math.round(t.reduce((s,r)=>s+(r.distance||0),0)),t.filter(r=>r.tripStatus==='เที่ยววิ่งปกติ').length,t.filter(r=>r.tripStatus==='เที่ยววิ่งมีความเสี่ยง').length,t.filter(r=>r.tripStatus==='เที่ยววิ่งผิดปกติ').length];})],'Daily Summary');
   XLSX.writeFile(wb,`FleetData_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
+// ── ผู้ดูแล: ตรวจเลขไมล์ (ระยะทาง 0 หรือเกิน 1,000 กม.) ──
+function mileCheckRows(){return filteredData.filter(r=>!(r.rawDistance>0)||r.rawDistance>1000).sort((a,b)=>(b.rawDistance||0)-(a.rawDistance||0));}
+function renderMileCheck(){
+  const box=document.getElementById('mileCheckBox');if(!box||!window.FV_ADMIN)return;
+  const rows=mileCheckRows(),esc=v=>String(v??'-').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  document.getElementById('mileCheckCount').textContent=rows.length?`${rows.length.toLocaleString()} เที่ยว`:'';
+  document.getElementById('mileCheckTable').innerHTML=!rows.length?'<div style="font-size:12px;color:var(--muted)">✅ ไม่พบระยะทางผิดปกติ</div>':
+    `<table class="drill-table"><thead><tr><th>เลขที่ใบรายการ</th><th>วันที่ปล่อย</th><th>ทะเบียน</th><th>DC</th><th>ไมล์ออก</th><th>ไมล์เข้า</th><th>ระยะทางในไฟล์</th><th>ใช้แทน</th><th>ปัญหา</th></tr></thead><tbody>`+
+    rows.slice(0,300).map(r=>`<tr><td class="mono">${esc(r.tripId)}</td><td>${esc(r.departDate)}</td><td style="cursor:pointer;text-decoration:underline" onclick="openDrill('plate','${esc(r.plate).replace(/'/g,"\\'")}')">${esc(r.plate)}</td><td>${esc((r.dc||'').replace(/^\d+\s+/,''))}</td><td class="mono">${fmt(r.mileOut)}</td><td class="mono">${fmt(r.mileIn)}</td><td class="mono" style="color:#b8334a;font-weight:700">${fmt(r.rawDistance||0)}</td><td class="mono">${fmt(r.distance)}</td><td style="font-size:10px">${r.rawDistance>1000?'เกิน 1,000 กม.':'ระยะทาง 0'}</td></tr>`).join('')+
+    `</tbody></table>`+(rows.length>300?`<div style="font-size:11px;color:var(--muted);margin-top:6px">แสดง 300 รายการแรก — กด Excel เพื่อดูทั้งหมด</div>`:'');
+}
+function exportMileCheck(){
+  const rows=mileCheckRows();if(!rows.length)return;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['เลขที่ใบรายการ','วันที่ปล่อย','วันที่รับ','ทะเบียน','ชนิดรถ','ประเภทปล่อย','DC','ไมล์ออก','ไมล์เข้า','ระยะทางในไฟล์','ระยะทางที่ใช้แทน','ปัญหา'],...rows.map(r=>[r.tripId,r.departDate,r.returnDate,r.plate,r.vehicleType,r.releaseType,r.dc,r.mileOut,r.mileIn,r.rawDistance,Math.round(r.distance),r.rawDistance>1000?'เกิน 1,000 กม.':'ระยะทาง 0'])]),'Mile Check');
+  XLSX.writeFile(wb,`MileCheck_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 function exportDCTable(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['เลขที่ใบ','วันที่','ทะเบียน','ชนิดรถ','DC','ระยะทาง','สถานะรับ','ส่วนต่างไมล์','ประเภทเที่ยว'],...tableData.map(r=>[r.tripId,r.departDate,r.plate,r.vehicleType,r.dc,r.distance,r.dayStatus,r.mileDiff,r.tripStatus])]),'DC Detail');
@@ -1084,42 +1103,58 @@ function handleFileUpload(event){
     try{
       const wb=XLSX.read(e.target.result,{type:'binary'});
       const ws=wb.Sheets[wb.SheetNames[0]];
-      const raw=XLSX.utils.sheet_to_json(ws,{header:1});
-      const headers=raw[0];const rows=raw.slice(1);
-      const cIdx={};headers.forEach((h,i)=>{const t=(h||'').toString().trim();cIdx[t]=i;});
-      prog.textContent=`📊 พบ ${rows.length} แถว กำลังประมวลผล...`;
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // หาแถวหัวตาราง: ไฟล์แบบเดิมอยู่แถวแรก ไฟล์รายงาน NIMEX026001 อยู่ใต้ชื่อรายงาน
+      const hRow=raw.findIndex(r=>r.some(c=>(c||'').toString().trim()==='เลขที่ใบรายการ'));
+      if(hRow<0)throw new Error('ไม่พบคอลัมน์ "เลขที่ใบรายการ" ในไฟล์');
+      const cIdx={};raw[hRow].forEach((h,i)=>{const t=(h||'').toString().trim();if(t&&!(t in cIdx))cIdx[t]=i;});
+      const need=['ทะเบียนรถ','ชนิดรถ','ประเภทการปล่อยรถ','วันที่ปล่อยรถ','ไมล์ออก','ไมล์เข้า','DC'];
+      const miss=need.filter(k=>!(k in cIdx));if(miss.length)throw new Error('ไม่พบคอลัมน์ '+miss.join(', '));
+      const iDist=cIdx['ระยะทาง  (กม.)']??cIdx['ระยะทาง (กม.)'];
+      const rows=raw.slice(hRow+1);
+      prog.textContent=`📊 พบ ${rows.length.toLocaleString()} แถว กำลังประมวลผล...`;
       const parseD=s=>{if(!s)return null;s=s.toString().trim().split(/\s/)[0];const p=s.split('/');return p.length!==3?null:`${+p[2]-543}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;};
-      const vT=['040  รถปิกอัพ','042  รถควบคุมอุณหภูมิ4W'];
-      const vR=['02  รถร่วม นิติบุคคล','03  รถร่วม บุคคลธรรมดา'];
-      // ── เริ่มจากไฟล์ใหม่ทั้งหมด ไม่ merge กับข้อมูลเดิม ──
-      const newData=[];const seen=new Set();
+      const vT=['040  รถปิกอัพ','041  รถ 4 ล้อกลาง','042  รถควบคุมอุณหภูมิ4W'];
+      const vR=['02  รถร่วม นิติบุคคล','03  รถร่วม บุคคลธรรมดา','05  รถเสริม - ชั่วคราว'];
+      const norm=s=>(s||'').toString().trim().replace(/\s+/g,' ');
+      const vTn=vT.map(norm),vRn=vR.map(norm);
+      // อ่านไฟล์ใหม่ (ข้ามแถวชื่อ DC / แถวรวม เพราะไม่มีเลขที่ใบรายการ) — เที่ยวซ้ำในไฟล์ใช้แถวหลังสุด และวันที่รับรถล่าสุด
+      const fresh=new Map();
       rows.forEach(row=>{
+        const id=(row[cIdx['เลขที่ใบรายการ']]||'').toString().trim();
+        if(!id||id==='เลขที่ใบรายการ')return;
         const vt=(row[cIdx['ชนิดรถ']]||'').toString().trim();
         const rt=(row[cIdx['ประเภทการปล่อยรถ']]||'').toString().trim();
         const pl=(row[cIdx['ทะเบียนรถ']]||'').toString().trim();
-        if(!vT.includes(vt)||!vR.includes(rt)||pl.toUpperCase().includes('XXX'))return;
-        const id=(row[cIdx['เลขที่ใบรายการ']]||'').toString();
-        if(!id||seen.has(id))return;seen.add(id);
+        if(!vTn.includes(norm(vt))||!vRn.includes(norm(rt))||pl.toUpperCase().includes('XXX'))return;
         const dep=parseD(row[cIdx['วันที่ปล่อยรถ']]);
-        const ret=parseD(row[cIdx['วันที่รับรถ']]);
-        const dist=parseFloat(row[cIdx['ระยะทาง  (กม.)']||cIdx['ระยะทาง (กม.)']])||0;
-        const mOut=parseFloat(row[cIdx['ไมล์ออก']])||0;
-        const mIn=parseFloat(row[cIdx['ไมล์เข้า']])||0;
-        newData.push({tripId:id,departDate:dep,returnDate:ret,plate:pl,vehicleType:vt,dc:(row[cIdx['DC']]||'').toString().trim(),releaseType:rt,distance:dist>0?Math.min(dist,1000):null,rawDistance:dist,mileOut:mOut,mileIn:mIn,dayStatus:dep===ret?'รับรถภายในวัน':'รับรถข้ามวัน',mileDiff:null,tripStatus:'เที่ยววิ่งปกติ',route:(row[cIdx['ชื่อเส้นทาง']]||'').toString()});
+        let ret=parseD(row[cIdx['วันที่รับรถ']]);
+        const prev=fresh.get(id);
+        if(prev&&prev.returnDate&&(!ret||prev.returnDate>ret))ret=prev.returnDate;
+        const dist=parseFloat(row[iDist])||0;
+        fresh.set(id,{tripId:id,departDate:dep,returnDate:ret,plate:pl,vehicleType:vt,dc:(row[cIdx['DC']]||'').toString().trim(),releaseType:rt,distance:null,rawDistance:dist,
+          mileOut:parseFloat(row[cIdx['ไมล์ออก']])||0,mileIn:parseFloat(row[cIdx['ไมล์เข้า']])||0,dayStatus:'',mileDiff:null,tripStatus:'เที่ยววิ่งปกติ',route:(row[cIdx['ชื่อเส้นทาง']]||'').toString()});
       });
-      // แทนที่ข้อมูลทั้งหมด
-      allData=newData;
-      // คำนวณ mileDiff + tripStatus
+      if(!fresh.size)throw new Error('ไม่พบเที่ยววิ่งที่ตรงเงื่อนไขในไฟล์นี้');
+      // รวมกับข้อมูลเดิม: เลขที่ใบรายการซ้ำ → ใช้ค่าใหม่, ยังไม่มี → ต่อท้าย
+      const merged=new Map();let updated=0;
+      allData.forEach(r=>merged.set(String(r.tripId),r));
+      fresh.forEach((r,id)=>{if(merged.has(id)){updated++;merged.delete(id);}merged.set(id,r);});
+      const added=fresh.size-updated;
+      allData=[...merged.values()];
+      allData.forEach(r=>{r.dayStatus=r.departDate&&r.departDate===r.returnDate?'รับรถภายในวัน':'รับรถข้ามวัน';});
+      // คำนวณ mileDiff + tripStatus ใหม่ทั้งชุด (ต่อเนื่องข้ามเดือน)
       const byPlate={};allData.forEach(r=>{if(!byPlate[r.plate])byPlate[r.plate]=[];byPlate[r.plate].push(r);});
       Object.values(byPlate).forEach(trips=>{trips.sort((a,b)=>(a.departDate||'').localeCompare(b.departDate||''));trips.forEach((r,i)=>{r.mileDiff=i===0?null:r.mileOut-(trips[i-1].mileIn||0);});trips.forEach(r=>{const d=r.mileDiff;r.tripStatus=d===null?'เที่ยววิ่งปกติ':d<=0?'เที่ยววิ่งผิดปกติ':d<=10?'เที่ยววิ่งมีความเสี่ยง':'เที่ยววิ่งปกติ';});});
-      // คำนวณค่าเฉลี่ยระยะทางทดแทน
+      // ระยะทาง: 0 หรือเกิน 1,000 กม. ใช้ค่าเฉลี่ยของทะเบียนแทน (แอดมินเห็นรายการใน "ตรวจเลขไมล์")
       const avgD={};allData.forEach(r=>{if(r.rawDistance>0&&r.rawDistance<=1000){if(!avgD[r.plate])avgD[r.plate]=[];avgD[r.plate].push(r.rawDistance);}});
       Object.keys(avgD).forEach(p=>{avgD[p]=avgD[p].reduce((a,b)=>a+b,0)/avgD[p].length;});
-      allData.forEach(r=>{if(!r.distance||r.distance<=0||r.rawDistance>1000)r.distance=Math.min(avgD[r.plate]||150,1000);});
+      allData.forEach(r=>{r.distance=r.rawDistance>0&&r.rawDistance<=1000?r.rawDistance:Math.min(avgD[r.plate]||150,1000);});
       populateSlicers();applyFilters();
-      prog.textContent=`✅ โหลดไฟล์ใหม่สำเร็จ ${allData.length.toLocaleString()} เที่ยว (ข้อมูลเดิมถูกแทนที่ทั้งหมด)`;
-      setStatus(`โหลดไฟล์ใหม่ ${allData.length.toLocaleString()} เที่ยว`);
-      if(window.fvSave)window.fvSave(allData); /* ผู้ดูแล: บันทึกลง Google Sheet */
+      const sum=`ใหม่ ${added.toLocaleString()} · ทับค่าเดิม ${updated.toLocaleString()} · รวม ${allData.length.toLocaleString()} เที่ยว`;
+      prog.textContent=`✅ อ่านไฟล์สำเร็จ ${fresh.size.toLocaleString()} เที่ยว (${sum})`;
+      setStatus(`โหลดไฟล์ใหม่ ${sum}`);
+      if(window.fvSave)window.fvSave(allData,{file:fresh.size,added,updated}); /* ผู้ดูแล: บันทึกลง Google Sheet */
     }catch(err){prog.textContent='❌ เกิดข้อผิดพลาด: '+err.message;}
   };reader.readAsBinaryString(file);
 }
@@ -1467,7 +1502,7 @@ function renderDrillAvgDist(subset){
 (function(){var o=setTheme;window.setTheme=setTheme=function(t){o(t);try{localStorage.setItem('nimex-fv-theme',t)}catch(e){}};
  try{var t=localStorage.getItem('nimex-fv-theme');if(t&&t!=='light'){document.body.className=t;document.querySelectorAll('#themeGroup button').forEach(function(b,i){b.classList.toggle('active',['dark','light','minimalist'][i]===t)})}}catch(e){}})();
 </script>
-<script src="config.js?v=1"></script>
-<script src="boot.js?v=1"></script>
+<script src="config.js?v=2"></script>
+<script src="boot.js?v=2"></script>
 </body>
 </html>

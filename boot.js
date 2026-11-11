@@ -62,6 +62,14 @@
       .catch(function (e) { say('❌ บันทึกไม่สำเร็จ: ' + (e.message === 'denied' ? 'รหัสไม่ถูกต้อง' : e.message)); });
   };
 
+  /* ผู้ดูแล: บันทึกทะเบียนยกเว้น + เกณฑ์แจ้งเตือนลง Google Sheet */
+  window.fvSaveSettings = function (settings) {
+    if (!window.FV_ADMIN) return Promise.reject(new Error('ไม่ใช่โหมดผู้ดูแล'));
+    return api({ a: 'settings', settings: settings }).catch(function (e) {
+      throw new Error(e.message === 'unknown' ? 'ต้องอัปเดต Apps Script (Code.gs) และ Deploy เวอร์ชันใหม่ก่อน' : e.message === 'denied' ? 'รหัสไม่ถูกต้อง' : e.message);
+    });
+  };
+
   function askKey(err) {
     msg('<h2>ผู้ดูแลระบบ</h2>' + (err ? '<p class="bad">' + err + '</p>' : '<p>ใส่รหัสผู้ดูแลเพื่อเข้าโหมดจัดการข้อมูล</p>') +
       '<input id="adm-key" type="password" autocomplete="current-password" aria-label="รหัสผู้ดูแล"><div class="row"><a class="btn2" href="./">ดูแบบผู้ชม</a><button class="btn1" id="adm-go">เข้าสู่ระบบ</button></div>');
@@ -95,6 +103,7 @@
     Promise.all([authP, dataP]).then(function (x) {
       var D = x[1];
       if (window.FV_ADMIN) document.documentElement.classList.add('nx-admin');
+      window.FV_SETTINGS = D.settings || null;
       if (!D.rows || !D.rows.length) { if (window.FV_ADMIN) firstRun(); else msg('<h2>ยังไม่มีข้อมูล</h2><p>ผู้ดูแลยังไม่ได้นำเข้าข้อมูล</p>'); return; }
       window.FV_ROWS = fromRows(D.cols, D.rows);
       stamp(D.updated);

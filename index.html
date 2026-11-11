@@ -481,6 +481,18 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
         <button class="threshold-save" onclick="saveThresholds()">💾 บันทึกและตรวจสอบ</button>
         <span style="font-size:11px;color:var(--muted)" id="threshSaved"></span>
       </div>
+      <div class="nx-admin-only" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <h3>🅿️ ทะเบียนยกเว้น — รถจอดที่สาขา ไม่ได้นำรถกลับบ้าน</h3>
+        <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px">ส่วนต่างไมล์ข้ามวัน 0–10 กม. ถือว่าปกติ (ถ้าติดลบยังนับเป็นผิดปกติ) · มีผลกับผู้ชมทุกคนทันที ไม่ต้องอัปโหลดไฟล์ใหม่</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input class="threshold-input" id="exPlate" list="exPlateList" placeholder="ทะเบียน เช่น 3ฒข-1306" aria-label="ทะเบียน" style="width:170px;text-align:left">
+          <input class="threshold-input" id="exNote" placeholder="หมายเหตุ เช่น จอดสาขาเชียงใหม่" aria-label="หมายเหตุ" style="flex:1;min-width:180px;width:auto;text-align:left" onkeydown="if(event.key==='Enter')addExempt()">
+          <button class="threshold-save" onclick="addExempt()">➕ เพิ่ม</button>
+          <span style="font-size:11px;color:var(--muted)" id="exSaved"></span>
+        </div>
+        <datalist id="exPlateList"></datalist>
+        <div id="exList"></div>
+      </div>
     </div>
 
     <!-- Risk DC + Plate Tables -->
@@ -574,6 +586,43 @@ let sortKey = 'departDate', sortDir = 1;
 let charts = {}, drillCharts = {};
 let drillExportData = [];
 let thresholds = { abnDC:5, riskDC:10, pct:30, cross:20 };
+let settings = { exempt:[] };   /* ทะเบียนยกเว้น + เกณฑ์แจ้งเตือน บันทึกใน Google Sheet (boot.js) */
+
+// ═══════════════════════════════════════════
+//  คำนวณสถานะเที่ยว (ทำทุกครั้งที่โหลด/อัปโหลด/แก้ทะเบียนยกเว้น)
+//  • ไม่เทียบใบรายการในวันเดียวกัน — เทียบข้ามวันเท่านั้น
+//  • ส่วนต่าง = ไมล์ออกแรกสุดของวันนี้ − ไมล์เข้าสูงสุดของวันล่าสุดที่รถคันนั้นวิ่ง
+//  • ติดลบ = ผิดปกติ · 0 = ปกติ · 1–10 กม. = เสี่ยง (ทะเบียนยกเว้น = ปกติ) · เกิน 10 = ปกติ
+// ═══════════════════════════════════════════
+const normPlate = p => (p||'').toString().replace(/[\s-]/g,'').toUpperCase();
+function recomputeTrips(data){
+  const ex = new Set((settings.exempt||[]).map(e=>normPlate(e.plate)));
+  data.forEach(r=>{
+    r.dayStatus = r.departDate && r.departDate===r.returnDate ? 'รับรถภายในวัน' : 'รับรถข้ามวัน';
+    r.mileDiff = null; r.tripStatus = 'เที่ยววิ่งปกติ'; r.exempt = ex.has(normPlate(r.plate));
+  });
+  const byPlate = {};
+  data.forEach(r=>{ if(r.departDate) (byPlate[r.plate]=byPlate[r.plate]||[]).push(r); });
+  Object.values(byPlate).forEach(trips=>{
+    const days = {}; trips.forEach(r=>(days[r.departDate]=days[r.departDate]||[]).push(r));
+    let prevIn = null;
+    Object.keys(days).sort().forEach(k=>{
+      const t = days[k];
+      const outs = t.map(r=>+r.mileOut).filter(v=>v>0), ins = t.map(r=>+r.mileIn).filter(v=>v>0);
+      if(prevIn!==null && outs.length){
+        const d = Math.min(...outs) - prevIn;
+        const st = d<0 ? 'เที่ยววิ่งผิดปกติ' : (d>0 && d<=10 && !t[0].exempt) ? 'เที่ยววิ่งมีความเสี่ยง' : 'เที่ยววิ่งปกติ';
+        t.forEach(r=>{ r.mileDiff = d; r.tripStatus = st; });
+      }
+      if(ins.length) prevIn = Math.max(...ins);
+    });
+  });
+  // ระยะทาง 0 หรือเกิน 1,000 กม. → ค่าเฉลี่ยของทะเบียน (แอดมินเห็นใน "ตรวจเลขไมล์")
+  const avgD = {};
+  data.forEach(r=>{ if(r.rawDistance>0 && r.rawDistance<=1000) (avgD[r.plate]=avgD[r.plate]||[]).push(r.rawDistance); });
+  Object.keys(avgD).forEach(k=>{ avgD[k] = avgD[k].reduce((a,b)=>a+b,0)/avgD[k].length; });
+  data.forEach(r=>{ r.distance = r.rawDistance>0 && r.rawDistance<=1000 ? r.rawDistance : Math.min(avgD[r.plate]||150,1000); });
+}
 
 // ═══════════════════════════════════════════
 //  INIT
@@ -581,8 +630,12 @@ let thresholds = { abnDC:5, riskDC:10, pct:30, cross:20 };
 function init() {
   try {
     allData = window.FV_ROWS || []; /* โหลดจาก Google Sheet โดย boot.js */
+    const S = window.FV_SETTINGS || {};
+    settings.exempt = Array.isArray(S.exempt) ? S.exempt : [];
+    if (S.thresholds) thresholds = Object.assign(thresholds, S.thresholds);
+    loadThresholds(); renderExempt();
     if (!allData.length) { setStatus('ไม่มีข้อมูล — อัพโหลดไฟล์ Excel','warn'); return; }
-    loadThresholds();
+    recomputeTrips(allData);
     populateSlicers();
     applyFilters();
     setStatus(`โหลดสำเร็จ ${allData.length.toLocaleString()} เที่ยว`,'ok');
@@ -613,6 +666,41 @@ function saveThresholds() {
   };
   checkAlerts(filteredData);
   document.getElementById('threshSaved').textContent = '✅ ตรวจสอบแล้ว '+new Date().toLocaleTimeString('th-TH');
+  if (window.FV_ADMIN) persistSettings('threshSaved');
+}
+
+// ── ทะเบียนยกเว้น (รถจอดที่สาขา) — ผู้ดูแลเพิ่ม/ลบ แล้วบันทึกลง Google Sheet ──
+function persistSettings(msgId){
+  const el=document.getElementById(msgId);
+  if(!window.fvSaveSettings){return;}
+  if(el)el.textContent='⏳ กำลังบันทึกลง Google Sheet…';
+  window.fvSaveSettings({thresholds,exempt:settings.exempt})
+    .then(()=>{if(el)el.textContent='✅ บันทึกแล้ว '+new Date().toLocaleTimeString('th-TH');})
+    .catch(e=>{if(el)el.textContent='❌ บันทึกไม่สำเร็จ: '+e.message;});
+}
+function renderExempt(){
+  const box=document.getElementById('exList');if(!box)return;
+  const esc=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const cnt={};allData.forEach(r=>{const k=normPlate(r.plate);cnt[k]=(cnt[k]||0)+1;});
+  box.innerHTML=!settings.exempt.length?'<div style="font-size:11px;color:var(--muted);margin-top:8px">ยังไม่มีทะเบียนยกเว้น</div>':
+    `<table class="drill-table" style="margin-top:8px"><thead><tr><th>ทะเบียน</th><th>หมายเหตุ</th><th>เที่ยวในข้อมูล</th><th></th></tr></thead><tbody>`+
+    settings.exempt.map((e,i)=>`<tr><td><strong>${esc(e.plate)}</strong></td><td>${esc(e.note)}</td><td class="mono">${(cnt[normPlate(e.plate)]||0).toLocaleString()}</td><td><button class="action-btn danger" style="padding:3px 9px;font-size:11px" onclick="removeExempt(${i})">ลบ</button></td></tr>`).join('')+'</tbody></table>';
+  const dl=document.getElementById('exPlateList');
+  if(dl)dl.innerHTML=[...new Set(allData.map(r=>r.plate))].sort().map(p=>`<option value="${esc(p)}">`).join('');
+}
+function exemptChanged(){recomputeTrips(allData);renderExempt();applyFilters();persistSettings('exSaved');}
+function addExempt(){
+  const pi=document.getElementById('exPlate'),ni=document.getElementById('exNote');
+  const plate=(pi.value||'').trim(),note=(ni.value||'').trim();
+  const msg=document.getElementById('exSaved');
+  if(!plate){msg.textContent='ใส่ทะเบียนก่อน';return;}
+  if(settings.exempt.some(e=>normPlate(e.plate)===normPlate(plate))){msg.textContent='ทะเบียนนี้อยู่ในรายการแล้ว';return;}
+  if(!allData.some(r=>normPlate(r.plate)===normPlate(plate))&&!confirm(`ไม่พบทะเบียน "${plate}" ในข้อมูลตอนนี้ — เพิ่มไว้ก่อนหรือไม่?`))return;
+  settings.exempt.push({plate,note});pi.value='';ni.value='';exemptChanged();
+}
+function removeExempt(i){
+  const e=settings.exempt[i];if(!e||!confirm(`ลบทะเบียน ${e.plate} ออกจากรายการยกเว้น?`))return;
+  settings.exempt.splice(i,1);exemptChanged();
 }
 
 function checkAlerts(d) {
@@ -949,8 +1037,8 @@ function renderTrend(){
   // Analysis issues
   const totalAll=d.length;
   const issues=[];
-  topDC.slice(0,5).forEach(r=>{if(r.abn>=3)issues.push({type:'err',title:`⚠️ ${r.key}: ผิดปกติ ${r.abn} เที่ยว`,desc:'ค่าส่วนต่างไมล์ ≤ 0 หลายครั้ง — ตรวจสอบการบันทึกไมล์และ GPS'});});
-  topPlate.slice(0,5).forEach(r=>{if(r.risk>=2)issues.push({type:'warn',title:`🔶 ทะเบียน ${r.key}: เสี่ยง ${r.risk} เที่ยว`,desc:'ส่วนต่างไมล์ 1-10 กม. — ออกรถใกล้คลังหรือบันทึกผิด ตรวจสอบเส้นทางจริง'});});
+  topDC.slice(0,5).forEach(r=>{if(r.abn>=3)issues.push({type:'err',title:`⚠️ ${r.key}: ผิดปกติ ${r.abn} เที่ยว`,desc:'ไมล์ออกวันใหม่น้อยกว่าไมล์เข้าวันก่อน (ติดลบ) หลายครั้ง — ตรวจสอบการบันทึกไมล์และ GPS'});});
+  topPlate.slice(0,5).forEach(r=>{if(r.risk>=2)issues.push({type:'warn',title:`🔶 ทะเบียน ${r.key}: เสี่ยง ${r.risk} เที่ยว`,desc:'ส่วนต่างไมล์ข้ามวัน 1-10 กม. — ถ้ารถจอดที่สาขา ให้เพิ่มเป็นทะเบียนยกเว้นในตั้งค่า'});});
   const miss=d.filter(r=>!r.rawDistance||r.rawDistance<=0).length;
   if(miss>0)issues.push({type:'warn',title:`📊 ระยะทางขาดข้อมูล ${miss} รายการ`,desc:'ใช้ค่าเฉลี่ยทดแทน ทำให้ตัวเลขรวมคลาดเคลื่อน — บังคับกรอกระยะทางในระบบต้นทาง'});
   const cross=d.filter(r=>r.dayStatus==='รับรถข้ามวัน').length;
@@ -978,7 +1066,7 @@ function renderDCTable(){
     <td style="font-size:10px;cursor:pointer;color:var(--cyan)" onclick="openDrill('dc','${r.dc.replace(/'/g,"\\'")}')">${r.dc}</td>
     <td class="mono">${Math.round(r.distance||0).toLocaleString()}</td>
     <td style="font-size:10px">${r.dayStatus||'-'}</td>
-    <td class="mono" style="color:${r.mileDiff!=null&&r.mileDiff<=0?'#b8334a':r.mileDiff!=null&&r.mileDiff<=10?'#b8860b':'inherit'};font-weight:${r.mileDiff!=null&&r.mileDiff<=10?700:400}">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
+    <td class="mono" style="color:${r.tripStatus==='เที่ยววิ่งผิดปกติ'?'#b8334a':r.tripStatus==='เที่ยววิ่งมีความเสี่ยง'?'#b8860b':'inherit'};font-weight:${r.tripStatus!=='เที่ยววิ่งปกติ'?700:400}">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
     <td>${tc(r.tripStatus)}</td>
   </tr>`).join('');
   document.getElementById('tableInfo').textContent=`แสดง ${shown.length} จาก ${tableData.length.toLocaleString()} รายการ (กรอง ${filteredData.length.toLocaleString()})`;
@@ -1142,14 +1230,7 @@ function handleFileUpload(event){
       fresh.forEach((r,id)=>{if(merged.has(id)){updated++;merged.delete(id);}merged.set(id,r);});
       const added=fresh.size-updated;
       allData=[...merged.values()];
-      allData.forEach(r=>{r.dayStatus=r.departDate&&r.departDate===r.returnDate?'รับรถภายในวัน':'รับรถข้ามวัน';});
-      // คำนวณ mileDiff + tripStatus ใหม่ทั้งชุด (ต่อเนื่องข้ามเดือน)
-      const byPlate={};allData.forEach(r=>{if(!byPlate[r.plate])byPlate[r.plate]=[];byPlate[r.plate].push(r);});
-      Object.values(byPlate).forEach(trips=>{trips.sort((a,b)=>(a.departDate||'').localeCompare(b.departDate||''));trips.forEach((r,i)=>{r.mileDiff=i===0?null:r.mileOut-(trips[i-1].mileIn||0);});trips.forEach(r=>{const d=r.mileDiff;r.tripStatus=d===null?'เที่ยววิ่งปกติ':d<=0?'เที่ยววิ่งผิดปกติ':d<=10?'เที่ยววิ่งมีความเสี่ยง':'เที่ยววิ่งปกติ';});});
-      // ระยะทาง: 0 หรือเกิน 1,000 กม. ใช้ค่าเฉลี่ยของทะเบียนแทน (แอดมินเห็นรายการใน "ตรวจเลขไมล์")
-      const avgD={};allData.forEach(r=>{if(r.rawDistance>0&&r.rawDistance<=1000){if(!avgD[r.plate])avgD[r.plate]=[];avgD[r.plate].push(r.rawDistance);}});
-      Object.keys(avgD).forEach(p=>{avgD[p]=avgD[p].reduce((a,b)=>a+b,0)/avgD[p].length;});
-      allData.forEach(r=>{r.distance=r.rawDistance>0&&r.rawDistance<=1000?r.rawDistance:Math.min(avgD[r.plate]||150,1000);});
+      recomputeTrips(allData); /* ส่วนต่างไมล์ข้ามวัน + สถานะ + ระยะทาง คำนวณใหม่ทั้งชุด (ต่อเนื่องข้ามเดือน) */
       populateSlicers();applyFilters();
       const sum=`ใหม่ ${added.toLocaleString()} · ทับค่าเดิม ${updated.toLocaleString()} · รวม ${allData.length.toLocaleString()} เที่ยว`;
       prog.textContent=`✅ อ่านไฟล์สำเร็จ ${fresh.size.toLocaleString()} เที่ยว (${sum})`;
@@ -1207,9 +1288,10 @@ function switchDrillTab(id){
 // ── Abnormality Diagnosis ──
 function diagnoseTripAbnormality(r){
   const reasons=[];const diff=r.mileDiff;
-  if(diff===null||diff===undefined)reasons.push({icon:'🔵',text:'เที่ยวแรกของทะเบียน — ไม่มีค่าไมล์เข้าก่อนหน้า',sev:'info'});
-  else if(diff<=0)reasons.push({icon:'🔴',text:`ส่วนต่างไมล์ = ${Math.round(diff).toLocaleString()} กม. (ไมล์ออก ≤ ไมล์เข้ารอบก่อน) — บันทึกผิดลำดับหรือรถวิ่งย้อน`,sev:'err'});
-  else if(diff<=10)reasons.push({icon:'🟡',text:`ส่วนต่างไมล์ = ${Math.round(diff).toLocaleString()} กม. (1-10 กม.) — ออกรถใกล้คลัง หรือบันทึกผิด`,sev:'warn'});
+  if(diff===null||diff===undefined)reasons.push({icon:'🔵',text:'วันแรกของทะเบียนในข้อมูล — ไม่มีไมล์เข้าวันก่อนให้เทียบ',sev:'info'});
+  else if(diff<0)reasons.push({icon:'🔴',text:`ส่วนต่างไมล์ข้ามวัน = ${Math.round(diff).toLocaleString()} กม. (ไมล์ออกวันนี้ < ไมล์เข้าวันก่อน) — บันทึกไมล์ผิดหรือรถวิ่งย้อน`,sev:'err'});
+  else if(diff>0&&diff<=10&&!r.exempt)reasons.push({icon:'🟡',text:`ส่วนต่างไมล์ข้ามวัน = ${Math.round(diff).toLocaleString()} กม. (1-10 กม.) — ไม่ได้นำรถกลับบ้าน หรือบันทึกผิด`,sev:'warn'});
+  if(r.exempt)reasons.push({icon:'🅿️',text:'ทะเบียนยกเว้น (จอดที่สาขา) — ไมล์ข้ามวัน 0–10 กม. ถือว่าปกติ',sev:'info'});
   if(r.mileOut&&r.mileIn&&r.mileOut>r.mileIn)reasons.push({icon:'🔴',text:`ไมล์ออก (${r.mileOut.toLocaleString()}) > ไมล์เข้า (${r.mileIn.toLocaleString()}) — เครื่องวัดถอยหลังหรือสลับค่า`,sev:'err'});
   if(r.rawDistance!==undefined&&r.rawDistance!==r.distance){if(!r.rawDistance||r.rawDistance<=0)reasons.push({icon:'🟠',text:`ระยะทางในไฟล์ = 0 → ใช้ค่าเฉลี่ย ${Math.round(r.distance)} กม. แทน`,sev:'warn'});else if(r.rawDistance>1000)reasons.push({icon:'🟠',text:`ระยะทางในไฟล์ = ${Math.round(r.rawDistance).toLocaleString()} กม. (เกิน 1,000) → ใช้ค่าเฉลี่ยแทน`,sev:'warn'});}
   if(r.dayStatus==='รับรถข้ามวัน')reasons.push({icon:'📅',text:`รับรถข้ามวัน (ปล่อย ${r.departDate} — รับ ${r.returnDate})`,sev:'info'});
@@ -1262,7 +1344,7 @@ function buildDetailRows(rows){
     <td style="font-size:10px;cursor:pointer;color:var(--cyan)" onclick="openDrill('dc','${r.dc.replace(/'/g,"\\'")}')">${r.dc}</td>
     <td class="mono">${Math.round(r.distance||0).toLocaleString()}</td>
     <td style="font-size:10px">${r.dayStatus||'-'}</td>
-    <td class="mono" style="color:${r.mileDiff!=null&&r.mileDiff<=0?'#b8334a':r.mileDiff!=null&&r.mileDiff<=10?'#b8860b':'inherit'};font-weight:${r.mileDiff!=null&&r.mileDiff<=10?700:400}">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
+    <td class="mono" style="color:${r.tripStatus==='เที่ยววิ่งผิดปกติ'?'#b8334a':r.tripStatus==='เที่ยววิ่งมีความเสี่ยง'?'#b8860b':'inherit'};font-weight:${r.tripStatus!=='เที่ยววิ่งปกติ'?700:400}">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
     <td>${tc(r.tripStatus)}</td>
   </tr>`).join('');
 }
@@ -1278,7 +1360,7 @@ function buildAbnRows(rows){
       <td style="font-size:10px">${r.vehicleType.replace(/^\d+\s+/,'')}</td>
       <td style="font-size:10px;cursor:pointer;color:var(--cyan)" onclick="openDrill('dc','${r.dc.replace(/'/g,"\\'")}')">${r.dc.replace(/^\d+\s+DC\s+/,'DC ')}</td>
       <td class="mono">${Math.round(r.distance||0).toLocaleString()}</td>
-      <td class="mono" style="color:${r.mileDiff!=null&&r.mileDiff<=0?'#b8334a':r.mileDiff!=null&&r.mileDiff<=10?'#b8860b':'inherit'};font-weight:700">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
+      <td class="mono" style="color:${r.tripStatus==='เที่ยววิ่งผิดปกติ'?'#b8334a':r.tripStatus==='เที่ยววิ่งมีความเสี่ยง'?'#b8860b':'inherit'};font-weight:700">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
       <td>${tc(r.tripStatus)}</td>
       <td style="min-width:240px">${mkReasonHTML(reasons)}</td>
     </tr>`;
@@ -1372,7 +1454,7 @@ function renderDrillPlate(subset,plate){
         </div>
         <div style="display:flex;gap:5px;align-items:center">
           <span class="badge ${isErr?'abnormal':'risk'}">${r.tripStatus}</span>
-          ${r.mileDiff!=null?`<span class="mono" style="font-size:10px;color:${r.mileDiff<=0?'#b8334a':'#b8860b'}">ส่วนต่าง: ${Math.round(r.mileDiff).toLocaleString()} กม.</span>`:''}
+          ${r.mileDiff!=null?`<span class="mono" style="font-size:10px;color:${r.tripStatus==='เที่ยววิ่งผิดปกติ'?'#b8334a':r.tripStatus==='เที่ยววิ่งมีความเสี่ยง'?'#b8860b':'#2f8f8f'}">ส่วนต่าง: ${Math.round(r.mileDiff).toLocaleString()} กม.</span>`:''}
           <span class="mono" style="font-size:10px;color:var(--muted)">ไมล์ออก: ${r.mileOut?r.mileOut.toLocaleString():'-'}</span>
         </div>
       </div>
@@ -1401,7 +1483,7 @@ function renderDrillPlate(subset,plate){
           <td class="mono" style="font-size:9px">${r.tripId}</td><td style="white-space:nowrap">${r.departDate||'-'}</td>
           <td style="font-size:10px">${r.dc}</td><td class="mono">${Math.round(r.distance||0).toLocaleString()}</td>
           <td class="mono">${r.mileOut?r.mileOut.toLocaleString():'-'}</td><td class="mono">${r.mileIn?r.mileIn.toLocaleString():'-'}</td>
-          <td class="mono" style="color:${r.mileDiff!=null&&r.mileDiff<=0?'#b8334a':r.mileDiff!=null&&r.mileDiff<=10?'#b8860b':'inherit'};font-weight:${r.mileDiff!=null&&r.mileDiff<=10?700:400}">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
+          <td class="mono" style="color:${r.tripStatus==='เที่ยววิ่งผิดปกติ'?'#b8334a':r.tripStatus==='เที่ยววิ่งมีความเสี่ยง'?'#b8860b':'inherit'};font-weight:${r.tripStatus!=='เที่ยววิ่งปกติ'?700:400}">${r.mileDiff!=null?Math.round(r.mileDiff).toLocaleString():'-'}</td>
           <td style="font-size:10px">${r.dayStatus||'-'}</td>
           <td><span class="badge ${r.tripStatus==='เที่ยววิ่งปกติ'?'normal':r.tripStatus==='เที่ยววิ่งมีความเสี่ยง'?'risk':'abnormal'}">${r.tripStatus}</span></td>
           <td>${isA?mkReasonHTML(diagnoseTripAbnormality(r)):''}</td>
@@ -1413,7 +1495,7 @@ function renderDrillPlate(subset,plate){
     const c1=document.getElementById('dc1');
     if(c1)drillCharts['d1']=new Chart(c1,{type:'bar',data:{labels:sd.map(getDateLabel),datasets:[{label:'ระยะทาง (กม.)',data:sd.map(d=>Math.round(byDate[d].reduce((s,r)=>s+(r.distance||0),0))),backgroundColor:'#6e93d6',borderRadius:4}]},options:chartOpts()});
     const c2=document.getElementById('dc2');
-    if(c2)drillCharts['d2']=new Chart(c2,{type:'line',data:{labels:sd.map(getDateLabel),datasets:[{label:'ส่วนต่างไมล์ (กม.)',data:sd.map(d=>{const v=byDate[d].find(r=>r.mileDiff!=null);return v?Math.round(v.mileDiff):null}),borderColor:'#2f8f8f',backgroundColor:'rgba(47,143,143,.1)',tension:.4,pointRadius:5,pointBackgroundColor:sd.map(d=>{const v=byDate[d].find(r=>r.mileDiff!=null);return v&&v.mileDiff<=0?'#b8334a':v&&v.mileDiff<=10?'#b8860b':'#2f8f8f'}),fill:true}]},options:chartOpts({plugins:{legend:{display:true,position:'top',labels:{color:getCSS('--text')}}}})});
+    if(c2)drillCharts['d2']=new Chart(c2,{type:'line',data:{labels:sd.map(getDateLabel),datasets:[{label:'ส่วนต่างไมล์ (กม.)',data:sd.map(d=>{const v=byDate[d].find(r=>r.mileDiff!=null);return v?Math.round(v.mileDiff):null}),borderColor:'#2f8f8f',backgroundColor:'rgba(47,143,143,.1)',tension:.4,pointRadius:5,pointBackgroundColor:sd.map(d=>{const v=byDate[d].find(r=>r.mileDiff!=null);return v&&v.tripStatus==='เที่ยววิ่งผิดปกติ'?'#b8334a':v&&v.tripStatus==='เที่ยววิ่งมีความเสี่ยง'?'#b8860b':'#2f8f8f'}),fill:true}]},options:chartOpts({plugins:{legend:{display:true,position:'top',labels:{color:getCSS('--text')}}}})});
   },80);
 }
 
@@ -1502,7 +1584,7 @@ function renderDrillAvgDist(subset){
 (function(){var o=setTheme;window.setTheme=setTheme=function(t){o(t);try{localStorage.setItem('nimex-fv-theme',t)}catch(e){}};
  try{var t=localStorage.getItem('nimex-fv-theme');if(t&&t!=='light'){document.body.className=t;document.querySelectorAll('#themeGroup button').forEach(function(b,i){b.classList.toggle('active',['dark','light','minimalist'][i]===t)})}}catch(e){}})();
 </script>
-<script src="config.js?v=2"></script>
-<script src="boot.js?v=2"></script>
+<script src="config.js?v=3"></script>
+<script src="boot.js?v=3"></script>
 </body>
 </html>

@@ -1,7 +1,8 @@
 /** NIMEX Fleet Vehicle — Apps Script (วางใน Extensions > Apps Script ของ Google Sheet ใหม่ บันทึกเป็น Code.gs)
  *  Script Properties: ADMIN_KEY = รหัสผู้ดูแล (ห้ามเขียนรหัสลงไฟล์นี้)
  *  Deploy > New deployment > Web app > Execute as: Me · Who has access: Anyone → คัดลอก URL /exec ใส่ใน config.js
- *  แท็บ Rows และ Log สร้างให้อัตโนมัติ */
+ *  แท็บ Rows, Exempt และ Log สร้างให้อัตโนมัติ
+ *  อัปเดตโค้ดนี้แล้ว: Deploy > Manage deployments > ✏️ แก้ไข > Version: New version > Deploy (ลิงก์ /exec เดิมใช้ต่อได้) */
 var COLS = ['tripId','departDate','returnDate','plate','vehicleType','dc','releaseType','distance','rawDistance',
   'mileOut','mileIn','dayStatus','mileDiff','tripStatus','route'];
 var TEXT_COLS = ['tripId','departDate','returnDate','plate','vehicleType','dc','releaseType','dayStatus','tripStatus','route'];
@@ -14,13 +15,21 @@ function tab_(name, head) {
   return t;
 }
 function rowsTab_() { return tab_('Rows', COLS); }
+var EX_HEAD = ['plate', 'note'];
+function exTab_() { return tab_('Exempt', EX_HEAD); }
+function settings_() {
+  var t = exTab_(), n = t.getLastRow(), ex = [];
+  if (n > 1) t.getRange(2, 1, n - 1, 2).getValues().forEach(function (r) { if (String(r[0]).trim()) ex.push({ plate: String(r[0]).trim(), note: String(r[1] || '') }); });
+  var th = null; try { th = JSON.parse(PropertiesService.getScriptProperties().getProperty('THRESHOLDS') || 'null'); } catch (e) {}
+  return { exempt: ex, thresholds: th };
+}
 function log_(a, d) { tab_('Log', ['time', 'action', 'detail']).appendRow([new Date(), a, d]); }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 function publicJson_() {
   var t = rowsTab_(), n = t.getLastRow();
   var rows = n < 2 ? [] : t.getRange(2, 1, n - 1, COLS.length).getValues();
-  return JSON.stringify({ ok: true, cols: COLS, rows: rows, updated: PropertiesService.getScriptProperties().getProperty('UPDATED') || '' });
+  return JSON.stringify({ ok: true, cols: COLS, rows: rows, settings: settings_(), updated: PropertiesService.getScriptProperties().getProperty('UPDATED') || '' });
 }
 function cacheGet_() {
   var c = CacheService.getScriptCache(), n = c.get(CK + '-n'); if (!n) return null;
@@ -53,6 +62,19 @@ function doPost(e) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) return json_({ ok: false, error: 'busy' });
   try {
+    if (b.a === 'settings') {           // ทะเบียนยกเว้น (แท็บ Exempt) + เกณฑ์แจ้งเตือน
+      var st = b.settings || {}, ex = Array.isArray(st.exempt) ? st.exempt : [];
+      if (ex.length > 2000) return json_({ ok: false, error: 'too_many' });
+      var et = exTab_(), en = et.getLastRow();
+      if (en > 1) et.getRange(2, 1, en - 1, 2).clearContent();
+      if (ex.length) {
+        et.getRange(2, 1, ex.length, 2).setNumberFormat('@').setValues(ex.map(function (e) { return [String(e.plate || '').slice(0, 40), String(e.note || '').slice(0, 200)]; }));
+      }
+      if (st.thresholds) PropertiesService.getScriptProperties().setProperty('THRESHOLDS', JSON.stringify(st.thresholds).slice(0, 2000));
+      log_('settings', ex.length + ' exempt plates');
+      cacheClear_(); try { cachePut_(publicJson_()); } catch (x) {}
+      return json_({ ok: true });
+    }
     var t = rowsTab_();
     if (b.a === 'begin') {               // replace everything: an upload replaces all trips (same as the original page)
       var n = t.getLastRow(); if (n > 1) t.getRange(2, 1, n - 1, COLS.length).clearContent();

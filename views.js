@@ -83,12 +83,13 @@ function renderAnalysis() {
   const shown = rows.slice(0, 100), mx = Math.max(1e-9, ...shown.map(r => r.v || 0));
   const fmtV = v => M.rate ? nf1(v) + '%' : AN.met === 'avg' ? nf1(v) : nf0(v);
   const drill = ['dc', 'plate', 'vehicle', 'zone'].includes(AN.dim);
+  const gCol = (settings.grades || []).some(g => g.metric === AN.met);
   document.getElementById('anInfo').textContent =
     `${D.l} ${total.toLocaleString()} รายการ${M.rate ? ` (อย่างน้อย ${AN.min} เที่ยว)` : ''} · เรียงจาก${M.rate ? 'อัตราสูงสุด' : 'มากสุด'}` +
     (rows.length > 100 ? ` · แสดง 100 อันดับแรก` : '') + (drill ? ' · คลิกแถวเพื่อดูรายละเอียด' : '');
   box.innerHTML = !shown.length ? '<div class="an-empty">ไม่มีรายการที่ตรงเงื่อนไข — ลองลดจำนวนเที่ยวขั้นต่ำ หรือเปลี่ยนช่วงเวลา</div>' :
-    `<table class="an-t"><thead><tr><th>#</th><th>${escH(D.l)}</th><th>${AN.dim === 'zone' ? 'กลุ่ม' : 'Zone / DC'}</th><th class="r">เที่ยว</th><th class="r">${escH(M.l)}</th><th class="r">เทียบช่วงก่อน</th><th style="width:22%"></th></tr></thead><tbody>` +
-    shown.map((r, i) => `<tr${drill ? ` class="click" tabindex="0" data-k="${escH(r.key)}"` : ''}><td>${i + 1}</td><td><b>${escH(AN.dim === 'dc' ? dcName(r.key) : r.key)}</b></td><td class="muted">${escH(r.ctx)}</td><td class="r">${nf0(r.n)}</td><td class="r"><b>${fmtV(r.v)}</b></td><td class="r">${anDelta(r.v, r.p)}</td><td><div class="an-bar"><i style="width:${Math.max(0, Math.min(100, (r.v || 0) / mx * 100))}%;background:${M.rate ? '#b8334a' : '#1d57b8'}"></i></div></td></tr>`).join('') +
+    `<table class="an-t"><thead><tr><th>#</th><th>${escH(D.l)}</th><th>${AN.dim === 'zone' ? 'กลุ่ม' : 'Zone / DC'}</th><th class="r">เที่ยว</th><th class="r">${escH(M.l)}</th>${gCol ? '<th>เกรด</th>' : ''}<th class="r">เทียบช่วงก่อน</th><th style="width:22%"></th></tr></thead><tbody>` +
+    shown.map((r, i) => `<tr${drill ? ` class="click" tabindex="0" data-k="${escH(r.key)}"` : ''}><td>${i + 1}</td><td><b>${escH(AN.dim === 'dc' ? dcName(r.key) : r.key)}</b></td><td class="muted">${escH(r.ctx)}</td><td class="r">${nf0(r.n)}</td><td class="r"><b>${fmtV(r.v)}</b></td>${gCol ? `<td><span class="gr-badge">${escH(gradeOf(AN.met, r.v))}</span></td>` : ''}<td class="r">${anDelta(r.v, r.p)}</td><td><div class="an-bar"><i style="width:${Math.max(0, Math.min(100, (r.v || 0) / mx * 100))}%;background:${M.rate ? '#b8334a' : '#1d57b8'}"></i></div></td></tr>`).join('') +
     '</tbody></table>';
 }
 function anOpen(key) {
@@ -102,6 +103,66 @@ function anOpen(key) {
 }
 document.addEventListener('click', e => { const tr = e.target.closest('#anTable tr.click'); if (tr) anOpen(tr.dataset.k); });
 document.addEventListener('keydown', e => { if (e.key === 'Enter') { const tr = e.target.closest && e.target.closest('#anTable tr.click'); if (tr) anOpen(tr.dataset.k); } });
+
+/* ═══ เกรด: ผู้ดูแลกำหนดเอง — ชุดละ 1 ตัวชี้วัด, แต่ละขั้น = ชื่อเกรด + ค่าเกณฑ์, เกินทุกขั้น = เกรดสุดท้าย ═══ */
+const GRADE_METS = {
+  bad:    { l: '% เสี่ยง+ผิดปกติ', low: true },
+  abn:    { l: '% ผิดปกติ',        low: true },
+  risk:   { l: '% มีความเสี่ยง',   low: true },
+  cross:  { l: '% รับรถข้ามวัน',   low: true },
+  normal: { l: '% เที่ยววิ่งปกติ', low: false },
+};
+function gradeOf(metric, v) {
+  const g = (settings.grades || []).find(x => x.metric === metric), M = GRADE_METS[metric];
+  if (!g || !M || !Number.isFinite(v)) return '';
+  const bands = (g.bands || []).filter(b => b.g && Number.isFinite(+b.v)).map(b => ({ g: b.g, v: +b.v })).sort((a, b) => M.low ? a.v - b.v : b.v - a.v);
+  if (!bands.length) return '';
+  const hit = bands.find(b => M.low ? v <= b.v : v >= b.v);
+  return hit ? hit.g : (g.else || 'F');
+}
+function metricValue(metric, arr) {
+  const n = arr.length; if (!n) return NaN;
+  const c = f => arr.filter(f).length / n * 100;
+  if (metric === 'bad') return c(r => r.tripStatus !== 'เที่ยววิ่งปกติ');
+  if (metric === 'abn') return c(r => r.tripStatus === 'เที่ยววิ่งผิดปกติ');
+  if (metric === 'risk') return c(r => r.tripStatus === 'เที่ยววิ่งมีความเสี่ยง');
+  if (metric === 'cross') return c(r => r.dayStatus === 'รับรถข้ามวัน');
+  return c(r => r.tripStatus === 'เที่ยววิ่งปกติ');
+}
+let GR_DRAFT = null;
+function renderGrades() {
+  const box = document.getElementById('gradeEd'); if (!box) return;
+  if (!GR_DRAFT) GR_DRAFT = JSON.parse(JSON.stringify(settings.grades || []));
+  const used = new Set(GR_DRAFT.map(g => g.metric)), free = Object.keys(GRADE_METS).filter(k => !used.has(k));
+  box.innerHTML = (GR_DRAFT.length ? '' : '<p class="muted" style="font-size:13px;margin-bottom:10px">ยังไม่มีเกณฑ์เกรด — เลือกตัวชี้วัดแล้วกด "เพิ่มชุดเกรด"</p>') +
+    GR_DRAFT.map((g, i) => { const M = GRADE_METS[g.metric], cur = metricValue(g.metric, filteredData);
+      return `<div class="gr-set"><div class="gr-h"><b>${escH(M.l)}</b><span class="muted">${M.low ? 'ต่ำ = ดี: ได้เกรดแรกที่ค่า ≤ เกณฑ์' : 'สูง = ดี: ได้เกรดแรกที่ค่า ≥ เกณฑ์'} · ช่วงที่เลือกตอนนี้ ${nf1(cur)}% → <b>${escH(gradeOf(g.metric, cur) || '—')}</b></span>
+        <button type="button" class="action-btn danger" onclick="grDelSet(${i})">ลบชุดนี้</button></div>
+        <table class="an-t" style="max-width:520px"><thead><tr><th>เกรด</th><th>${M.low ? 'ไม่เกิน' : 'อย่างน้อย'} (%)</th><th></th></tr></thead><tbody>` +
+        (g.bands || []).map((b, j) => `<tr><td><input class="threshold-input gr-in" data-i="${i}" data-j="${j}" data-k="g" value="${escH(b.g)}" maxlength="6" aria-label="ชื่อเกรด" style="width:80px"></td><td><input class="threshold-input gr-in" data-i="${i}" data-j="${j}" data-k="v" type="number" step="0.1" value="${escH(b.v)}" aria-label="ค่าเกณฑ์" style="width:110px"></td><td><button type="button" class="action-btn" onclick="grDelBand(${i},${j})" aria-label="ลบขั้นนี้">✕</button></td></tr>`).join('') +
+        `<tr><td colspan="3"><button type="button" class="action-btn" onclick="grAddBand(${i})">+ เพิ่มเกรด</button></td></tr>
+        <tr><td>เกินทุกเกณฑ์ =</td><td><input class="threshold-input gr-in" data-i="${i}" data-k="else" value="${escH(g.else || 'F')}" maxlength="6" aria-label="เกรดเมื่อเกินทุกเกณฑ์" style="width:80px"></td><td></td></tr></tbody></table></div>`; }).join('') +
+    (free.length ? `<div class="gr-add"><select id="grMet" aria-label="ตัวชี้วัดสำหรับเกรด">${free.map(k => `<option value="${k}">${escH(GRADE_METS[k].l)}</option>`).join('')}</select><button type="button" class="action-btn" onclick="grAddSet()">+ เพิ่มชุดเกรด</button></div>` : '') +
+    `<div class="gr-save"><button type="button" class="threshold-save" onclick="grSave()">💾 บันทึกเกณฑ์เกรด</button><button type="button" class="action-btn" onclick="GR_DRAFT=null;renderGrades()">ยกเลิกการแก้ไข</button><span id="grSaved" style="font-size:12px;color:var(--muted)"></span></div>`;
+}
+function grAddSet() { const m = document.getElementById('grMet').value; GR_DRAFT.push({ metric: m, bands: [{ g: 'A', v: '' }], else: 'F' }); renderGrades(); }
+function grDelSet(i) { if (confirmSafe('ลบชุดเกรด ' + GRADE_METS[GR_DRAFT[i].metric].l + '?')) { GR_DRAFT.splice(i, 1); renderGrades(); } }
+function grAddBand(i) { const b = GR_DRAFT[i].bands; const n = String.fromCharCode(65 + Math.min(b.length, 25)); b.push({ g: n, v: '' }); renderGrades(); }
+function grDelBand(i, j) { GR_DRAFT[i].bands.splice(j, 1); renderGrades(); }
+function confirmSafe(t) { try { return window.confirm(t); } catch (e) { return true; } }
+document.addEventListener('input', e => {
+  const t = e.target.closest && e.target.closest('.gr-in'); if (!t || !GR_DRAFT) return;
+  const g = GR_DRAFT[+t.dataset.i]; if (!g) return;
+  if (t.dataset.k === 'else') g.else = t.value.trim(); else g.bands[+t.dataset.j][t.dataset.k] = t.dataset.k === 'v' ? (t.value === '' ? '' : +t.value) : t.value.trim();
+});
+function grSave() {
+  const bad = [];
+  GR_DRAFT.forEach(g => { g.bands = (g.bands || []).filter(b => b.g !== '' || b.v !== ''); g.bands.forEach(b => { if (!b.g || b.v === '' || !Number.isFinite(+b.v)) bad.push(GRADE_METS[g.metric].l); }); });
+  const msg = document.getElementById('grSaved');
+  if (bad.length) { msg.textContent = '⚠️ กรอกชื่อเกรดและค่าเกณฑ์ให้ครบ: ' + [...new Set(bad)].join(', '); msg.style.color = 'var(--red)'; return; }
+  settings.grades = JSON.parse(JSON.stringify(GR_DRAFT)); GR_DRAFT = null; renderGrades(); renderAll();
+  persistSettings('grSaved');
+}
 
 /* ═══ หน้าตั้งค่า (ผู้ดูแล): การ์ดสรุป → เปิดทีละหัวข้อ ═══ */
 let SET_OPEN = '';
@@ -128,14 +189,17 @@ function renderSettings() {
   box.innerHTML =
     setCard('thresh', '🔔', 'เกณฑ์แจ้งเตือน', [`ผิดปกติ/DC/วัน เกิน ${thresholds.abnDC} · เสี่ยง/DC/วัน เกิน ${thresholds.riskDC}`, `% เสี่ยง+ผิดปกติ เกิน ${thresholds.pct}% · ข้ามวัน/วัน เกิน ${thresholds.cross}`]) +
     setCard('exempt', '🅿️', 'ทะเบียนยกเว้น (จอดที่สาขา)', [`${(settings.exempt || []).length.toLocaleString()} ทะเบียน`, `เที่ยวที่ไม่ถูกนับเป็นเสี่ยง ${saved.toLocaleString()} เที่ยว`]) +
+    setCard('grade', '🏅', 'เกณฑ์เกรด', (settings.grades || []).length ? (settings.grades || []).map(g => `${escH(GRADE_METS[g.metric] ? GRADE_METS[g.metric].l : g.metric)}: ${(g.bands || []).map(b => escH(b.g) + (GRADE_METS[g.metric] && GRADE_METS[g.metric].low ? ' ≤' : ' ≥') + b.v).join(' · ')} · อื่นๆ ' + escH(g.else || 'F')}`) : ['ยังไม่ได้กำหนด — เพิ่ม/ลบเกรดเองได้']) +
     setCard('mile', '🛠️', 'ตรวจเลขไมล์', [`${mile.toLocaleString()} เที่ยวในช่วงที่เลือก`, 'ระยะทาง 0 หรือเกิน 1,000 กม.']) +
     setCard('zone', '🗺️', 'จับภาค (Zone)', [`${Object.keys(ZONE_MAP).length} DC · ${new Set(Object.values(ZONE_MAP)).size} Zone`, unk.length ? `<span style="color:var(--red)">DC ยังไม่มี Zone ${unk.length} แห่ง</span>` : 'DC ในข้อมูลมี Zone ครบ'], 'ดูรายการ ›') +
     setCard('data', '📁', 'ข้อมูล', [`${allData.length.toLocaleString()} เที่ยว · ${ds.length ? rangeLabel(ds[0], ds[ds.length - 1]) : '—'}`, escH(upd)], 'จัดการ ›');
   if (SET_OPEN === 'exempt') renderExemptPicker();
   if (SET_OPEN === 'zone') renderZoneTable();
   if (SET_OPEN === 'data') renderDataInfo();
+  if (SET_OPEN === 'grade' && !document.querySelector('#gradeEd .gr-in:focus')) renderGrades();
 }
 function openSet(id) {
+  if (id === 'grade') GR_DRAFT = null;
   SET_OPEN = id;
   document.getElementById('setCards').hidden = !!id;
   document.querySelectorAll('.set-sec').forEach(s => { s.hidden = s.id !== 'set-' + id; });

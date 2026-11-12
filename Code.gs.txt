@@ -31,7 +31,8 @@ function settings_() {
   var t = exTab_(), n = t.getLastRow(), ex = [];
   if (n > 1) t.getRange(2, 1, n - 1, 2).getValues().forEach(function (r) { if (String(r[0]).trim()) ex.push({ plate: String(r[0]).trim(), note: String(r[1] || '') }); });
   var th = null; try { th = JSON.parse(PropertiesService.getScriptProperties().getProperty('THRESHOLDS') || 'null'); } catch (e) {}
-  return { exempt: ex, thresholds: th };
+  var gr = []; try { gr = JSON.parse(PropertiesService.getScriptProperties().getProperty('GRADES') || '[]'); } catch (e) {}
+  return { exempt: ex, thresholds: th, grades: gr };
 }
 function log_(a, d) { tab_('Log', ['time', 'action', 'detail']).appendRow([new Date(), a, d]); }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
@@ -81,6 +82,7 @@ function doPost(e) {
         et.getRange(2, 1, ex.length, 2).setNumberFormat('@').setValues(ex.map(function (e) { return [String(e.plate || '').slice(0, 40), String(e.note || '').slice(0, 200)]; }));
       }
       if (st.thresholds) PropertiesService.getScriptProperties().setProperty('THRESHOLDS', JSON.stringify(st.thresholds).slice(0, 2000));
+      if (Array.isArray(st.grades)) { var gj = JSON.stringify(st.grades); if (gj.length > 8000) return json_({ ok: false, error: 'grades_too_long' }); PropertiesService.getScriptProperties().setProperty('GRADES', gj); }
       log_('settings', ex.length + ' exempt plates');
       cacheClear_(); try { cachePut_(publicJson_()); } catch (x) {}
       return json_({ ok: true });

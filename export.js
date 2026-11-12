@@ -21,7 +21,8 @@ function dPct(c, p) { if (p == null || !Number.isFinite(p) || !p) return null; r
 function dTxt(v, pp) { if (v == null || !Number.isFinite(v)) return 'ไม่มีช่วงก่อนหน้า'; if (Math.abs(v) < 0.05) return pp ? '0 pp' : '0%'; return (v > 0 ? '▲ ' : '▼ ') + Math.abs(v).toFixed(1) + (pp ? ' pp' : '%'); }
 function secKpi() {
   const S = xStats(filteredData), P = prevData() ? xStats(prevData()) : null;
-  return [
+  const gr = (m, v) => typeof gradeOf === 'function' ? gradeOf(m, v) : '';
+  const K = [
     { l: 'เที่ยววิ่งรวม', v: S.n.toLocaleString(), u: 'เที่ยว', d: P ? dTxt(dPct(S.n, P.n)) : 'ไม่มีช่วงก่อนหน้า', bad: false },
     { l: 'ระยะทางรวม', v: Math.round(S.dist).toLocaleString(), u: 'กม.', d: P ? dTxt(dPct(S.dist, P.dist)) : 'ไม่มีช่วงก่อนหน้า', bad: false },
     { l: 'เฉลี่ยต่อเที่ยว', v: Math.round(S.avg).toLocaleString(), u: 'กม./เที่ยว', d: P ? dTxt(dPct(S.avg, P.avg)) : 'ไม่มีช่วงก่อนหน้า', bad: false },
@@ -29,6 +30,15 @@ function secKpi() {
     { l: 'มีความเสี่ยง', v: S.riskP.toFixed(1) + '%', u: `${S.risk.toLocaleString()} เที่ยว`, d: P ? dTxt(S.riskP - P.riskP, 1) : 'ไม่มีช่วงก่อนหน้า', bad: P ? S.riskP > P.riskP + 0.05 : false, good: P ? S.riskP < P.riskP - 0.05 : false },
     { l: 'ผิดปกติ', v: S.abnP.toFixed(1) + '%', u: `${S.abn.toLocaleString()} เที่ยว`, d: P ? dTxt(S.abnP - P.abnP, 1) : 'ไม่มีช่วงก่อนหน้า', bad: P ? S.abnP > P.abnP + 0.05 : false, good: P ? S.abnP < P.abnP - 0.05 : false },
   ];
+  K[3].g = gr('normal', S.normP); K[4].g = gr('risk', S.riskP); K[5].g = gr('abn', S.abnP);
+  return K;
+}
+function gradeLine() { /* เกรดของตัวชี้วัดที่ไม่มีการ์ดของตัวเอง */
+  if (typeof gradeOf !== 'function') return '';
+  const S = xStats(filteredData), out = [];
+  const b = gradeOf('bad', S.riskP + S.abnP), c = gradeOf('cross', S.cross);
+  if (b) out.push(`เกรด % เสี่ยง+ผิดปกติ: ${b}`); if (c) out.push(`เกรด % ข้ามวัน: ${c}`);
+  return out.join(' · ');
 }
 function byKey(arr, kf) { const m = new Map(); arr.forEach(r => { const k = kf(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }); return m; }
 function secZone() {
@@ -125,7 +135,7 @@ function svgKpi(W) {
       <text x="18" y="32" font-size="17" fill="${C.goldL}" font-weight="500">${xe(k.l)}</text>
       <rect x="${cw - 168}" y="14" width="152" height="28" rx="14" fill="#fff" opacity=".94"/><text x="${cw - 92}" y="33" font-size="${/ไม่มี/.test(k.d) ? 12 : 15}" fill="${dc}" text-anchor="middle" font-weight="600">${xe(k.d)}</text>
       <text x="18" y="86" font-size="42" fill="#fff" font-weight="600">${xe(k.v)}</text>
-      <text x="18" y="112" font-size="15" fill="#b9c9e6">${xe(k.u)}</text></g>`;
+      <text x="18" y="112" font-size="15" fill="#b9c9e6">${xe(k.u)}</text>${k.g ? `<rect x="${cw - 70}" y="58" width="54" height="54" rx="12" fill="${C.gold}"/><text x="${cw - 43}" y="96" font-size="28" font-weight="700" fill="${C.navy}" text-anchor="middle">${xe(k.g)}</text><text x="${cw - 43}" y="126" font-size="11" fill="#b9c9e6" text-anchor="middle">เกรด</text>` : ''}</g>`;
   });
   return { s, h: rowsN * ch + (rowsN - 1) * gap };
 }
@@ -183,7 +193,7 @@ function head(W) {
   return `<rect width="${W}" height="124" fill="url(#gN)"/><rect y="121" width="${W}" height="3" fill="${C.gold}"/>${lg}
     <text x="236" y="56" font-size="30" font-weight="600" fill="#fff">NIMEX Fleet Vehicle</text>
     <text x="236" y="86" font-size="18" fill="${C.goldL}">${xe(cut(scopeLine(), 70))}</text>
-    <text x="236" y="110" font-size="15" fill="#b9c9e6">${xe(cmpLine())}</text>`;
+    <text x="236" y="110" font-size="15" fill="#b9c9e6">${xe(cmpLine())}${gradeLine() ? ' · ' + xe(gradeLine()) : ''}</text>`;
 }
 const foot = (W, H) => `<rect y="${H - 40}" width="${W}" height="40" fill="${C.navy}"/><rect y="${H - 40}" width="${W}" height="3" fill="${C.gold}"/><text x="${W / 2}" y="${H - 14}" font-size="14" fill="#b9c9e6" text-anchor="middle">NIMEX Fleet Vehicle Dashboard · สร้างเมื่อ ${xe(new Date().toLocaleString('th-TH'))}</text>`;
 const wrap = (W, H, inner) => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><style>${XS.font}text{font-family:'Prompt',sans-serif}</style><defs><linearGradient id="gN" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${C.navy}"/><stop offset="1" stop-color="${C.navy2}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="${C.bg}"/>${inner}</svg>`;
@@ -277,7 +287,7 @@ function compose169() {
     const x = 30 + i * (cw + 16), y = 144, dc = /ไม่มี/.test(k.d) ? C.muted : k.bad ? C.red : k.good ? C.green : C.navy;
     s += `<g transform="translate(${x} ${y})"><rect width="${cw}" height="150" rx="16" fill="url(#gN)"/><rect y="145" width="${cw}" height="5" fill="${C.gold}"/>
       <text x="18" y="34" font-size="18" fill="${C.goldL}" font-weight="500">${xe(k.l)}</text>
-      <text x="18" y="88" font-size="40" fill="#fff" font-weight="600">${xe(k.v)}</text><text x="18" y="114" font-size="14" fill="#b9c9e6">${xe(k.u)}</text>
+      <text x="18" y="88" font-size="40" fill="#fff" font-weight="600">${xe(k.v)}</text><text x="18" y="114" font-size="14" fill="#b9c9e6">${xe(k.u)}</text>${k.g ? `<rect x="${cw - 62}" y="54" width="46" height="46" rx="10" fill="${C.gold}"/><text x="${cw - 39}" y="86" font-size="24" font-weight="700" fill="${C.navy}" text-anchor="middle">${xe(k.g)}</text>` : ''}
       <rect x="14" y="120" width="${cw - 28}" height="22" rx="11" fill="#fff" opacity=".94"/><text x="${cw / 2}" y="136" font-size="${/ไม่มี/.test(k.d) ? 12 : 14}" fill="${dc}" text-anchor="middle" font-weight="600">${xe(k.d)}</text></g>`;
   });
   const pw = (W - 60 - 20) / 2, ph = (H - 144 - 150 - 24 - 20 - 56) / 2, py1 = 144 + 150 + 24, py2 = py1 + ph + 20;
@@ -341,7 +351,7 @@ async function xPptx() {
 }
 function xExcel() {
   const wb = XLSX.utils.book_new(), add = (name, aoa) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name.slice(0, 31));
-  add('สรุป', [['NIMEX Fleet Vehicle'], [scopeLine()], [cmpLine()], [], ['หัวข้อ', 'ค่า', 'หน่วย', 'เทียบช่วงก่อน'], ...secKpi().map(k => [k.l, k.v, k.u, k.d])]);
+  add('สรุป', [['NIMEX Fleet Vehicle'], [scopeLine()], [cmpLine()], [], ['หัวข้อ', 'ค่า', 'หน่วย', 'เทียบช่วงก่อน', 'เกรด'], ...secKpi().map(k => [k.l, k.v, k.u, k.d, k.g || '']), ...(gradeLine() ? [[], [gradeLine()]] : [])]);
   const T = (name, t) => add(name, [t.cols.map(c => c[0]), ...t.rows]);
   for (const k of keysPicked()) {
     if (k === 'zone') T('Zone', secZone());
@@ -365,7 +375,8 @@ function xExcel() {
 }
 function lineText() {
   const K = secKpi(), num = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'], L = ['🚐 NIMEX Fleet Vehicle', `🗓️ ${scopeLine()}`, `↔️ ${cmpLine()}`, ''];
-  L.push('📊 KPI'); K.forEach(k => L.push(`${k.bad ? '⚠️' : '✅'} ${k.l}: ${k.v} ${k.u.includes('เที่ยว') && k.v.includes('%') ? '(' + k.u + ')' : k.u} ${k.d !== '–' ? '[' + k.d + ']' : ''}`.trim()));
+  L.push('📊 KPI'); K.forEach(k => L.push(`${k.bad ? '⚠️' : '✅'} ${k.l}: ${k.v} ${k.u.includes('เที่ยว') && k.v.includes('%') ? '(' + k.u + ')' : k.u} ${k.d !== '–' ? '[' + k.d + ']' : ''}${k.g ? ' 🏅' + k.g : ''}`.trim()));
+  if (gradeLine()) L.push('🏅 ' + gradeLine());
   const z = secZone(); if (keysPicked().includes('zone') && z.rows.length) { L.push('', '🗺️ ราย Zone (เสี่ยง / ผิดปกติ)'); z.rows.forEach(r => L.push(`• ${r[0]}: ${r[2].toLocaleString()} เที่ยว · ${r[4]} / ${r[5]}`)); }
   const d = secDC(); if (keysPicked().includes('dc') && d.rows.length) { L.push('', '⚠️ DC เสี่ยง+ผิดปกติสูงสุด'); d.rows.slice(0, 5).forEach((r, i) => L.push(`${num[i]} ${r[1]} (${r[2]}) ${r[6]}`)); }
   const p = secPlate(); if (keysPicked().includes('plate') && p.rows.length) { L.push('', '🔑 ทะเบียนที่ควรตรวจ'); p.rows.slice(0, 5).forEach((r, i) => L.push(`${num[i]} ${r[1]} · ${r[2]} · เสี่ยง ${r[4]} / ผิดปกติ ${r[5]}`)); }

@@ -48,17 +48,26 @@
   function stamp(iso) { if (iso) status('อัปเดตล่าสุด ' + new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })); }
 
   /* called by the page right after it has read and processed an uploaded Excel file */
-  window.fvApi = api; /* ใช้โดย share.js (บันทึกค่าตั้ง) */
-  window.fvSave = function (rows) {
+  window.fvSave = function (rows, info) {
     var prog = $('uploadProgress'), say = function (t) { if (prog) prog.textContent = t; };
     if (!window.FV_ADMIN) return;
     var ds = rows.map(function (r) { return r.departDate; }).filter(Boolean).sort();
-    if (!window.confirm('ตรวจก่อนบันทึก\n\n• ' + rows.length.toLocaleString() + ' เที่ยว\n• วันที่ปล่อยรถ ' + (ds[0] || '-') + ' ถึง ' + (ds[ds.length - 1] || '-') +
-      '\n\nข้อมูลใน Google Sheet จะถูกแทนที่ด้วยไฟล์นี้ทั้งหมด (เหมือนการอัปโหลดเดิม)\nบันทึกให้ผู้ชมทุกคนเห็นหรือไม่?')) { say('ยังไม่ได้บันทึก — ข้อมูลใหม่แสดงเฉพาะหน้านี้'); return; }
+    info = info || {};
+    if (!window.confirm('ตรวจก่อนบันทึก\n\n• ไฟล์นี้ ' + (info.file || 0).toLocaleString() + ' เที่ยว — ใหม่ ' + (info.added || 0).toLocaleString() + ' · ทับค่าเดิม ' + (info.updated || 0).toLocaleString() +
+      '\n• รวมทั้งหมดหลังบันทึก ' + rows.length.toLocaleString() + ' เที่ยว\n• วันที่ปล่อยรถ ' + (ds[0] || '-') + ' ถึง ' + (ds[ds.length - 1] || '-') +
+      '\n\nเที่ยวที่เลขที่ใบรายการซ้ำจะใช้ค่าจากไฟล์ใหม่ เที่ยวใหม่ต่อท้ายข้อมูลเดิม\nบันทึกให้ผู้ชมทุกคนเห็นหรือไม่?')) { say('ยังไม่ได้บันทึก — ข้อมูลใหม่แสดงเฉพาะหน้านี้'); return; }
     say('⏳ กำลังบันทึกลง Google Sheet…');
     pushAll(rows, 'upload', function (n, all) { say('⏳ กำลังบันทึก ' + n.toLocaleString() + ' / ' + all.toLocaleString()); })
       .then(function (r) { say('✅ บันทึกแล้ว ' + r.total.toLocaleString() + ' เที่ยว · ผู้ชมเห็นข้อมูลใหม่แล้ว'); stamp(new Date().toISOString()); })
       .catch(function (e) { say('❌ บันทึกไม่สำเร็จ: ' + (e.message === 'denied' ? 'รหัสไม่ถูกต้อง' : e.message)); });
+  };
+
+  /* ผู้ดูแล: บันทึกทะเบียนยกเว้น + เกณฑ์แจ้งเตือนลง Google Sheet */
+  window.fvSaveSettings = function (settings) {
+    if (!window.FV_ADMIN) return Promise.reject(new Error('ไม่ใช่โหมดผู้ดูแล'));
+    return api({ a: 'settings', settings: settings }).catch(function (e) {
+      throw new Error(e.message === 'unknown' ? 'ต้องอัปเดต Apps Script (Code.gs) และ Deploy เวอร์ชันใหม่ก่อน' : e.message === 'denied' ? 'รหัสไม่ถูกต้อง' : e.message);
+    });
   };
 
   function askKey(err) {
@@ -94,9 +103,9 @@
     Promise.all([authP, dataP]).then(function (x) {
       var D = x[1];
       if (window.FV_ADMIN) document.documentElement.classList.add('nx-admin');
+      window.FV_SETTINGS = D.settings || null;
       if (!D.rows || !D.rows.length) { if (window.FV_ADMIN) firstRun(); else msg('<h2>ยังไม่มีข้อมูล</h2><p>ผู้ดูแลยังไม่ได้นำเข้าข้อมูล</p>'); return; }
       window.FV_ROWS = fromRows(D.cols, D.rows);
-      window.FV_SETTINGS = D.settings || {}; window.FV_SERVER_V = D.v || 1;
       stamp(D.updated);
       $('boot').hidden = true;
       init();

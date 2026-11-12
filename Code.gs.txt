@@ -1,26 +1,12 @@
 /** NIMEX Fleet Vehicle — Apps Script (วางใน Extensions > Apps Script ของ Google Sheet ใหม่ บันทึกเป็น Code.gs)
  *  Script Properties: ADMIN_KEY = รหัสผู้ดูแล (ห้ามเขียนรหัสลงไฟล์นี้)
  *  Deploy > New deployment > Web app > Execute as: Me · Who has access: Anyone → คัดลอก URL /exec ใส่ใน config.js
- *  แท็บ Rows / Settings / Log สร้างให้อัตโนมัติ
- *  รุ่น 2: เพิ่มค่าตั้งของผู้ดูแล (เกณฑ์เกรด, KPI ที่แสดง, จำนวนเที่ยวขั้นต่ำ) สำหรับหน้าแชร์/อินโฟกราฟิก */
+ *  แท็บ Rows, Exempt และ Log สร้างให้อัตโนมัติ
+ *  อัปเดตโค้ดนี้แล้ว: Deploy > Manage deployments > ✏️ แก้ไข > Version: New version > Deploy (ลิงก์ /exec เดิมใช้ต่อได้) */
 var COLS = ['tripId','departDate','returnDate','plate','vehicleType','dc','releaseType','distance','rawDistance',
   'mileOut','mileIn','dayStatus','mileDiff','tripStatus','route'];
 var TEXT_COLS = ['tripId','departDate','returnDate','plate','vehicleType','dc','releaseType','dayStatus','tripStatus','route'];
 var CK = 'fv-data', CHUNK = 90000;
-var KPI_IDS = ['trips','dist','normal','abn','risk','cross'];
-
-/* ค่าตั้งของผู้ดูแล: grade = เกณฑ์ % เที่ยวปกติของเกรด A–D (ต่ำกว่า D = F), kpis = KPI ที่แสดง, minTrips = เที่ยวขั้นต่ำของ DC ที่นำมาจัดอันดับ */
-function validSetting_(k, v) {
-  if (k === 'grade') return v && typeof v === 'object' && ['A','B','C','D'].every(function (g) { return typeof v[g] === 'number' && v[g] >= 0 && v[g] <= 100; }) && v.A >= v.B && v.B >= v.C && v.C >= v.D;
-  if (k === 'kpis') return Array.isArray(v) && v.length >= 1 && v.length <= KPI_IDS.length && v.every(function (x) { return KPI_IDS.indexOf(x) >= 0; });
-  if (k === 'minTrips') return typeof v === 'number' && v === Math.floor(v) && v >= 1 && v <= 1000;
-  return false;
-}
-function readSettings_() {
-  var t = tab_('Settings', ['key', 'value']), n = t.getLastRow(), o = {};
-  if (n > 1) t.getRange(2, 1, n - 1, 2).getValues().forEach(function (r) { if (r[0] !== '') { try { o[String(r[0])] = JSON.parse(r[1]); } catch (e) {} } });
-  return o;
-}
 
 function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
 function tab_(name, head) {
@@ -29,13 +15,21 @@ function tab_(name, head) {
   return t;
 }
 function rowsTab_() { return tab_('Rows', COLS); }
+var EX_HEAD = ['plate', 'note'];
+function exTab_() { return tab_('Exempt', EX_HEAD); }
+function settings_() {
+  var t = exTab_(), n = t.getLastRow(), ex = [];
+  if (n > 1) t.getRange(2, 1, n - 1, 2).getValues().forEach(function (r) { if (String(r[0]).trim()) ex.push({ plate: String(r[0]).trim(), note: String(r[1] || '') }); });
+  var th = null; try { th = JSON.parse(PropertiesService.getScriptProperties().getProperty('THRESHOLDS') || 'null'); } catch (e) {}
+  return { exempt: ex, thresholds: th };
+}
 function log_(a, d) { tab_('Log', ['time', 'action', 'detail']).appendRow([new Date(), a, d]); }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 function publicJson_() {
   var t = rowsTab_(), n = t.getLastRow();
   var rows = n < 2 ? [] : t.getRange(2, 1, n - 1, COLS.length).getValues();
-  return JSON.stringify({ ok: true, v: 2, cols: COLS, rows: rows, settings: readSettings_(), updated: PropertiesService.getScriptProperties().getProperty('UPDATED') || '' });
+  return JSON.stringify({ ok: true, cols: COLS, rows: rows, settings: settings_(), updated: PropertiesService.getScriptProperties().getProperty('UPDATED') || '' });
 }
 function cacheGet_() {
   var c = CacheService.getScriptCache(), n = c.get(CK + '-n'); if (!n) return null;
@@ -68,6 +62,19 @@ function doPost(e) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) return json_({ ok: false, error: 'busy' });
   try {
+    if (b.a === 'settings') {           // ทะเบียนยกเว้น (แท็บ Exempt) + เกณฑ์แจ้งเตือน
+      var st = b.settings || {}, ex = Array.isArray(st.exempt) ? st.exempt : [];
+      if (ex.length > 2000) return json_({ ok: false, error: 'too_many' });
+      var et = exTab_(), en = et.getLastRow();
+      if (en > 1) et.getRange(2, 1, en - 1, 2).clearContent();
+      if (ex.length) {
+        et.getRange(2, 1, ex.length, 2).setNumberFormat('@').setValues(ex.map(function (e) { return [String(e.plate || '').slice(0, 40), String(e.note || '').slice(0, 200)]; }));
+      }
+      if (st.thresholds) PropertiesService.getScriptProperties().setProperty('THRESHOLDS', JSON.stringify(st.thresholds).slice(0, 2000));
+      log_('settings', ex.length + ' exempt plates');
+      cacheClear_(); try { cachePut_(publicJson_()); } catch (x) {}
+      return json_({ ok: true });
+    }
     var t = rowsTab_();
     if (b.a === 'begin') {               // replace everything: an upload replaces all trips (same as the original page)
       var n = t.getLastRow(); if (n > 1) t.getRange(2, 1, n - 1, COLS.length).clearContent();
@@ -83,17 +90,6 @@ function doPost(e) {
         return COLS.map(function (c, i) { var v = r[i]; return v === null || v === undefined ? '' : v; });
       }));
       return json_({ ok: true, total: t.getLastRow() - 1 });
-    }
-    if (b.a === 'settings') {
-      var cur = readSettings_(), inc = b.settings || {};
-      for (var k in inc) { if (!validSetting_(k, inc[k])) return json_({ ok: false, error: 'bad_value', key: k }); cur[k] = inc[k]; }
-      var st = tab_('Settings', ['key', 'value']), m = st.getLastRow();
-      if (m > 1) st.getRange(2, 1, m - 1, 2).clearContent();
-      var kv = Object.keys(cur).map(function (x) { return [x, JSON.stringify(cur[x])]; });
-      if (kv.length) { st.getRange(2, 1, kv.length, 2).setNumberFormat('@'); st.getRange(2, 1, kv.length, 2).setValues(kv); }
-      log_('settings', JSON.stringify(inc));
-      cacheClear_(); try { cachePut_(publicJson_()); } catch (x) {}
-      return json_({ ok: true, settings: cur });
     }
     if (b.a === 'finish') {
       var total = t.getLastRow() - 1;

@@ -2,11 +2,12 @@
    ภาพสร้างจาก SVG ล้วน + ฝังฟอนต์ Prompt และโลโก้เป็น data URL (ไม่ใช้ html2canvas เพราะสระไทยเพี้ยน) */
 'use strict';
 const XS = {
-  secs: [['kpi', 'KPI หลัก'], ['zone', 'ผลราย Zone'], ['dc', 'DC เสี่ยง+ผิดปกติสูงสุด 10 อันดับ'], ['plate', 'ทะเบียนเสี่ยง+ผิดปกติมากสุด 10 อันดับ'], ['daily', 'เที่ยววิ่งรายวัน'], ['vehicle', 'แยกชนิดรถ / ประเภทการปล่อยรถ']],
-  picked: new Set(['kpi', 'zone', 'dc', 'plate', 'daily']),
+  secs: [['kpi', 'KPI หลัก'], ['zone', 'ผลราย Zone'], ['dc', 'DC เสี่ยง+ผิดปกติสูงสุด 10 อันดับ'], ['plate', 'ทะเบียนเสี่ยง+ผิดปกติมากสุด 10 อันดับ'], ['daily', 'เที่ยววิ่งรายวัน'], ['vehicle', 'แยกชนิดรถ / ประเภทการปล่อยรถ'],
+    ['bw_bad', 'ดีสุด/แย่สุด: % เสี่ยง+ผิดปกติ'], ['bw_abn', 'ดีสุด/แย่สุด: % ผิดปกติ'], ['bw_risk', 'ดีสุด/แย่สุด: % มีความเสี่ยง'], ['bw_cross', 'ดีสุด/แย่สุด: % รับรถข้ามวัน']],
+  picked: new Set(['kpi', 'zone', 'dc', 'plate', 'daily']),   /* ดีสุด/แย่สุด ไม่ติ๊กไว้ก่อน */
   font: null, logo: null,
 };
-const C = { navy: '#0a2a5e', navy2: '#123f8c', gold: '#d4af37', goldL: '#f0d57a', ink: '#0b1f3f', muted: '#55657f', line: '#dbe3f0', red: '#b8334a', blue: '#1d57b8', amber: '#b8860b', bg: '#f0f4f8' };
+const C = { green: '#1e7d4f', navy: '#0a2a5e', navy2: '#123f8c', gold: '#d4af37', goldL: '#f0d57a', ink: '#0b1f3f', muted: '#55657f', line: '#dbe3f0', red: '#b8334a', blue: '#1d57b8', amber: '#b8860b', bg: '#f0f4f8' };
 const xe = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const cut = (s, n) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
@@ -17,16 +18,16 @@ function xStats(a) {
 }
 const prevData = () => compareInfo && compareInfo.has ? compareInfo.prevData : null;
 function dPct(c, p) { if (p == null || !Number.isFinite(p) || !p) return null; return (c - p) / p * 100; }
-function dTxt(v, pp) { if (v == null || !Number.isFinite(v)) return '–'; if (Math.abs(v) < 0.05) return pp ? '0 pp' : '0%'; return (v > 0 ? '▲ ' : '▼ ') + Math.abs(v).toFixed(1) + (pp ? ' pp' : '%'); }
+function dTxt(v, pp) { if (v == null || !Number.isFinite(v)) return 'ไม่มีช่วงก่อนหน้า'; if (Math.abs(v) < 0.05) return pp ? '0 pp' : '0%'; return (v > 0 ? '▲ ' : '▼ ') + Math.abs(v).toFixed(1) + (pp ? ' pp' : '%'); }
 function secKpi() {
   const S = xStats(filteredData), P = prevData() ? xStats(prevData()) : null;
   return [
-    { l: 'เที่ยววิ่งรวม', v: S.n.toLocaleString(), u: 'เที่ยว', d: P ? dTxt(dPct(S.n, P.n)) : '–', bad: false },
-    { l: 'ระยะทางรวม', v: Math.round(S.dist).toLocaleString(), u: 'กม.', d: P ? dTxt(dPct(S.dist, P.dist)) : '–', bad: false },
-    { l: 'เฉลี่ยต่อเที่ยว', v: Math.round(S.avg).toLocaleString(), u: 'กม./เที่ยว', d: P ? dTxt(dPct(S.avg, P.avg)) : '–', bad: false },
-    { l: 'เที่ยววิ่งปกติ', v: S.normP.toFixed(1) + '%', u: `${(S.n - S.risk - S.abn).toLocaleString()} เที่ยว`, d: P ? dTxt(S.normP - P.normP, 1) : '–', bad: P ? S.normP < P.normP - 0.05 : false },
-    { l: 'มีความเสี่ยง', v: S.riskP.toFixed(1) + '%', u: `${S.risk.toLocaleString()} เที่ยว`, d: P ? dTxt(S.riskP - P.riskP, 1) : '–', bad: P ? S.riskP > P.riskP + 0.05 : false },
-    { l: 'ผิดปกติ', v: S.abnP.toFixed(1) + '%', u: `${S.abn.toLocaleString()} เที่ยว`, d: P ? dTxt(S.abnP - P.abnP, 1) : '–', bad: P ? S.abnP > P.abnP + 0.05 : false },
+    { l: 'เที่ยววิ่งรวม', v: S.n.toLocaleString(), u: 'เที่ยว', d: P ? dTxt(dPct(S.n, P.n)) : 'ไม่มีช่วงก่อนหน้า', bad: false },
+    { l: 'ระยะทางรวม', v: Math.round(S.dist).toLocaleString(), u: 'กม.', d: P ? dTxt(dPct(S.dist, P.dist)) : 'ไม่มีช่วงก่อนหน้า', bad: false },
+    { l: 'เฉลี่ยต่อเที่ยว', v: Math.round(S.avg).toLocaleString(), u: 'กม./เที่ยว', d: P ? dTxt(dPct(S.avg, P.avg)) : 'ไม่มีช่วงก่อนหน้า', bad: false },
+    { l: 'เที่ยววิ่งปกติ', v: S.normP.toFixed(1) + '%', u: `${(S.n - S.risk - S.abn).toLocaleString()} เที่ยว`, d: P ? dTxt(S.normP - P.normP, 1) : 'ไม่มีช่วงก่อนหน้า', bad: P ? S.normP < P.normP - 0.05 : false, good: P ? S.normP > P.normP + 0.05 : false },
+    { l: 'มีความเสี่ยง', v: S.riskP.toFixed(1) + '%', u: `${S.risk.toLocaleString()} เที่ยว`, d: P ? dTxt(S.riskP - P.riskP, 1) : 'ไม่มีช่วงก่อนหน้า', bad: P ? S.riskP > P.riskP + 0.05 : false, good: P ? S.riskP < P.riskP - 0.05 : false },
+    { l: 'ผิดปกติ', v: S.abnP.toFixed(1) + '%', u: `${S.abn.toLocaleString()} เที่ยว`, d: P ? dTxt(S.abnP - P.abnP, 1) : 'ไม่มีช่วงก่อนหน้า', bad: P ? S.abnP > P.abnP + 0.05 : false, good: P ? S.abnP < P.abnP - 0.05 : false },
   ];
 }
 function byKey(arr, kf) { const m = new Map(); arr.forEach(r => { const k = kf(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }); return m; }
@@ -50,6 +51,30 @@ function secPlate() {
 function secDaily() {
   const m = byKey(filteredData, r => r.departDate); const ds = [...m.keys()].filter(Boolean).sort();
   return ds.map(d => { const a = m.get(d); return { d, n: a.length, bad: a.filter(r => r.tripStatus !== 'เที่ยววิ่งปกติ').length }; });
+}
+const BW_MET = {
+  bw_bad:   ['% เสี่ยง+ผิดปกติ', S => S.riskP + S.abnP],
+  bw_abn:   ['% ผิดปกติ', S => S.abnP],
+  bw_risk:  ['% มีความเสี่ยง', S => S.riskP],
+  bw_cross: ['% รับรถข้ามวัน', S => S.cross],
+};   /* ทุกตัวชี้วัดในนี้ ต่ำ = ดี */
+function rankAll(k, level) {
+  const f = BW_MET[k][1], kf = level === 'DC' ? (r => r.dc) : (r => dcZone(r.dc));
+  return [...byKey(filteredData, kf)].map(([key, a]) => ({ key, S: xStats(a) })).filter(o => level === 'Zone' || o.S.n >= 20)
+    .map(o => ({ ...o, v: f(o.S) })).sort((a, b) => a.v - b.v || b.S.n - a.S.n);
+}
+function pickBW(list, want) { /* ดีสุด want + แย่สุด want · ถ้ามีไม่พอ ใช้ครึ่งหนึ่ง ห้ามซ้ำ */
+  const n = Math.min(want, Math.floor(list.length / 2));
+  return { best: list.slice(0, n), worst: list.slice(list.length - n).reverse() };
+}
+function secBW(k) {
+  const rows = [], name = (lv, key) => lv === 'DC' ? dcName(key) : key;
+  [['DC', 5], ['Zone', 3]].forEach(([lv, w]) => {
+    const p = pickBW(rankAll(k, lv), w);
+    p.best.forEach((o, i) => rows.push(['ดีสุด', i + 1, lv, name(lv, o.key), o.S.n, o.v.toFixed(1) + '%']));
+    p.worst.forEach((o, i) => rows.push(['แย่สุด', i + 1, lv, name(lv, o.key), o.S.n, o.v.toFixed(1) + '%']));
+  });
+  return { cols: [['', 'l', 80], ['อันดับ', 'r', 70], ['ระดับ', 'l', 80], ['ชื่อ', 'l', 260], ['เที่ยว', 'r', 90], [BW_MET[k][0], 'r', 150]], rows, note: 'ต่ำ = ดี · DC นับเฉพาะที่มีอย่างน้อย 20 เที่ยว · DC ดีสุด/แย่สุด 5 อันดับ, Zone 3 อันดับ' };
 }
 function secVehicle() {
   const out = [];
@@ -95,10 +120,10 @@ function svgKpi(W) {
   let s = '';
   K.forEach((k, i) => {
     const x = (i % cols) * (cw + gap), y = Math.floor(i / cols) * (ch + gap);
-    const dc = k.d === '–' ? C.muted : k.bad ? C.red : C.navy;
+    const dc = /ไม่มี/.test(k.d) ? C.muted : k.bad ? C.red : k.good ? C.green : C.navy;
     s += `<g transform="translate(${x} ${y})"><rect width="${cw}" height="${ch}" rx="16" fill="url(#gN)"/><rect y="${ch - 5}" width="${cw}" height="5" fill="${C.gold}"/>
       <text x="18" y="32" font-size="17" fill="${C.goldL}" font-weight="500">${xe(k.l)}</text>
-      <rect x="${cw - 128}" y="14" width="112" height="28" rx="14" fill="#fff" opacity=".94"/><text x="${cw - 72}" y="33" font-size="15" fill="${dc}" text-anchor="middle" font-weight="600">${xe(k.d)}</text>
+      <rect x="${cw - 168}" y="14" width="152" height="28" rx="14" fill="#fff" opacity=".94"/><text x="${cw - 92}" y="33" font-size="${/ไม่มี/.test(k.d) ? 12 : 15}" fill="${dc}" text-anchor="middle" font-weight="600">${xe(k.d)}</text>
       <text x="18" y="86" font-size="42" fill="#fff" font-weight="600">${xe(k.v)}</text>
       <text x="18" y="112" font-size="15" fill="#b9c9e6">${xe(k.u)}</text></g>`;
   });
@@ -115,7 +140,7 @@ function svgTable(T, W) {
     s += `<line x1="0" x2="${W}" y1="${y + rh}" y2="${y + rh}" stroke="${C.line}"/>`;
     T.cols.forEach((c, i) => {
       const w = c[2] * sc, v = r[i], txt = typeof v === 'number' ? v.toLocaleString() : cut(v, Math.floor(w / 9));
-      const col = /▲/.test(txt) ? C.red : /▼/.test(txt) ? C.blue : C.ink;
+      const col = /▲/.test(txt) ? C.red : /▼/.test(txt) ? C.green : txt === 'แย่สุด' ? C.red : txt === 'ดีสุด' ? C.green : C.ink;
       s += `<text x="${c[1] === 'r' ? xs[i] + w - 10 : xs[i] + 10}" y="${y + rh / 2 + 5}" font-size="${fs}" fill="${col}" text-anchor="${c[1] === 'r' ? 'end' : 'start'}">${xe(txt)}</text>`;
     });
   });
@@ -145,6 +170,7 @@ function piece(k, W) {
   if (k === 'dc') return svgTable(secDC(), W);
   if (k === 'plate') return svgTable(secPlate(), W);
   if (k === 'daily') return svgDaily(W);
+  if (BW_MET[k]) return svgTable(secBW(k), W);
   return svgTable(secVehicle(), W);
 }
 const secTitle = k => (XS.secs.find(x => x[0] === k) || [k, k])[1];
@@ -192,6 +218,100 @@ function loadLib(src, test) {
   return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = () => res(); s.onerror = () => rej(new Error('โหลดไลบรารีไม่สำเร็จ')); document.head.appendChild(s); });
 }
 
+/* ── อินโฟกราฟิก 16:9 (1920×1080 → 3840×2160) — ใช้ตัวกรองบนหน้า ไม่ต้องเลือกหัวข้อ ── */
+function zoneBase(range) { /* กราฟราย Zone แสดงครบทุก Zone: ใช้ช่วงเวลา + ชนิดรถ แต่ไม่กรองกลุ่ม/Zone/DC */
+  if (!range) return [];
+  const veh = document.getElementById('filterVehicle').value;
+  return allData.filter(r => r.departDate >= range.start && r.departDate <= range.end && (!veh || r.vehicleType === veh));
+}
+function axisFor(vals) { /* ค่าอยู่ช่วงแคบ → แกนไม่เริ่มที่ 0 */
+  const v = vals.filter(Number.isFinite); if (!v.length) return { lo: 0, hi: 1, note: '' };
+  const mn = Math.min(...v), mx = Math.max(...v);
+  let lo = 0; if (mn > 0 && (mx - mn) < mx * 0.25) lo = Math.max(0, Math.floor((mn - (mx - mn) * 0.6) / 5) * 5);
+  const hi = Math.max(lo + 1, Math.ceil(mx * 1.08));
+  return { lo, hi, note: lo > 0 ? `แกนเริ่มที่ ${lo}%` : '' };
+}
+function panel(x, y, w, h, title, body, note) {
+  return `<g transform="translate(${x} ${y})"><rect width="${w}" height="${h}" rx="16" fill="#fff" stroke="${C.line}"/><rect x="${w * .08}" width="${w * .84}" height="4" fill="${C.gold}"/>
+    <text x="22" y="40" font-size="21" font-weight="600" fill="${C.ink}">${xe(title)}</text>${note ? `<text x="${w - 22}" y="40" font-size="13" fill="${C.muted}" text-anchor="end">${xe(note)}</text>` : ''}${body}</g>`;
+}
+function hbars(items, w, h, fmt, color) { /* [{l, v, sub}] */
+  const ax = axisFor(items.map(i => i.v)), lw = 210, bw = w - lw - 150, rh = Math.min(48, (h - 70) / Math.max(1, items.length));
+  let s = '';
+  items.forEach((it, i) => {
+    const y = 64 + i * rh, len = Math.max(0, (it.v - ax.lo) / (ax.hi - ax.lo)) * bw;
+    s += `<text x="22" y="${y + rh / 2 + 2}" font-size="16" fill="${C.ink}">${xe(cut(it.l, 22))}</text><text x="22" y="${y + rh / 2 + 19}" font-size="12.5" fill="${C.muted}">${xe(it.sub || '')}</text>
+      <rect x="${lw}" y="${y + rh * .2}" width="${bw}" height="${rh * .5}" rx="6" fill="${C.line}" opacity=".55"/><rect x="${lw}" y="${y + rh * .2}" width="${len}" height="${rh * .5}" rx="6" fill="${color}"/>
+      <text x="${lw + bw + 12}" y="${y + rh * .45 + 6}" font-size="17" font-weight="600" fill="${C.ink}">${xe(fmt(it.v))}</text>`;
+  });
+  return { s, note: ax.note };
+}
+function vpairs(cats, A, B, w, h, la, lb, ca, cb, fmt) { /* แท่งคู่แนวตั้ง */
+  const m = { l: 56, r: 16, t: 70, b: 70 }, iw = w - m.l - m.r, ih = h - m.t - m.b, ax = axisFor([...A, ...B]), gw = iw / Math.max(1, cats.length);
+  let s = '';
+  [0, .5, 1].forEach(f => { const y = m.t + ih * (1 - f), v = ax.lo + (ax.hi - ax.lo) * f; s += `<line x1="${m.l}" x2="${w - m.r}" y1="${y}" y2="${y}" stroke="${C.line}"/><text x="${m.l - 8}" y="${y + 5}" font-size="13" fill="${C.muted}" text-anchor="end">${fmt(v)}</text>`; });
+  cats.forEach((c, i) => {
+    const x = m.l + i * gw, bw = gw * .34;
+    [[A[i], ca, x + gw * .14], [B[i], cb, x + gw * .52]].forEach(([v, col, bx]) => {
+      if (!Number.isFinite(v)) return; const hh = Math.max(0, (v - ax.lo) / (ax.hi - ax.lo)) * ih;
+      s += `<rect x="${bx}" y="${m.t + ih - hh}" width="${bw}" height="${hh}" rx="4" fill="${col}"/>`;
+    });
+    s += `<text x="${x + gw / 2}" y="${h - m.b + 22}" font-size="13" fill="${C.ink}" text-anchor="middle">${xe(cut(c, 9))}</text>`;
+  });
+  s += `<rect x="${m.l}" y="${h - 26}" width="14" height="12" fill="${ca}"/><text x="${m.l + 20}" y="${h - 15}" font-size="14" fill="${C.ink}">${xe(la)}</text><rect x="${m.l + 230}" y="${h - 26}" width="14" height="12" fill="${cb}"/><text x="${m.l + 250}" y="${h - 15}" font-size="14" fill="${C.ink}">${xe(lb)}</text>`;
+  return { s, note: ax.note };
+}
+function donut(parts, cx, cy, r) {
+  const tot = parts.reduce((a, p) => a + p.v, 0) || 1; let a0 = -Math.PI / 2, s = '';
+  parts.forEach(p => {
+    const a1 = a0 + p.v / tot * Math.PI * 2, large = a1 - a0 > Math.PI ? 1 : 0;
+    if (p.v > 0) s += `<path d="M${cx + r * Math.cos(a0)} ${cy + r * Math.sin(a0)} A${r} ${r} 0 ${large} 1 ${cx + r * Math.cos(a1 - 1e-6)} ${cy + r * Math.sin(a1 - 1e-6)}" stroke="${p.c}" stroke-width="${r * .42}" fill="none"/>`;
+    a0 = a1;
+  });
+  return s;
+}
+function compose169() {
+  const W = 1920, H = 1080, K = secKpi(), cw = (W - 60 - 5 * 16) / 6;
+  let s = head(W);
+  K.forEach((k, i) => {
+    const x = 30 + i * (cw + 16), y = 144, dc = /ไม่มี/.test(k.d) ? C.muted : k.bad ? C.red : k.good ? C.green : C.navy;
+    s += `<g transform="translate(${x} ${y})"><rect width="${cw}" height="150" rx="16" fill="url(#gN)"/><rect y="145" width="${cw}" height="5" fill="${C.gold}"/>
+      <text x="18" y="34" font-size="18" fill="${C.goldL}" font-weight="500">${xe(k.l)}</text>
+      <text x="18" y="88" font-size="40" fill="#fff" font-weight="600">${xe(k.v)}</text><text x="18" y="114" font-size="14" fill="#b9c9e6">${xe(k.u)}</text>
+      <rect x="14" y="120" width="${cw - 28}" height="22" rx="11" fill="#fff" opacity=".94"/><text x="${cw / 2}" y="136" font-size="${/ไม่มี/.test(k.d) ? 12 : 14}" fill="${dc}" text-anchor="middle" font-weight="600">${xe(k.d)}</text></g>`;
+  });
+  const pw = (W - 60 - 20) / 2, ph = (H - 144 - 150 - 24 - 20 - 56) / 2, py1 = 144 + 150 + 24, py2 = py1 + ph + 20;
+  /* 1) แยกประเภทการปล่อยรถ (ตามตัวกรอง) */
+  const rel = [...byKey(filteredData, r => r.releaseType)].map(([k, a]) => { const S = xStats(a); return { l: k.replace(/^\d+\s+/, ''), v: S.riskP + S.abnP, sub: `${S.n.toLocaleString()} เที่ยว · ${new Set(a.map(r => r.plate)).size.toLocaleString()} คัน` }; }).sort((a, b) => b.v - a.v);
+  const h1 = hbars(rel, pw, ph, v => v.toFixed(1) + '%', C.red);
+  s += panel(30, py1, pw, ph, '% เสี่ยง+ผิดปกติ แยกประเภทการปล่อยรถ', h1.s, h1.note);
+  /* 2) ราย Zone: ช่วงนี้ vs ช่วงก่อน (ครบทุก Zone) */
+  const ci = compareInfo, zc = byKey(zoneBase(ci && ci.cur), r => dcZone(r.dc)), zp = byKey(zoneBase(ci && ci.has ? ci.prev : null), r => dcZone(r.dc));
+  const zs = ZONE_ORDER.filter(z => zc.has(z));
+  const bad = (m, z) => m.has(z) ? (S => S.riskP + S.abnP)(xStats(m.get(z))) : NaN;
+  const p2 = vpairs(zs, zs.map(z => bad(zc, z)), zs.map(z => bad(zp, z)), pw, ph, 'ช่วงนี้', ci && ci.has ? 'ช่วงก่อนหน้า' : 'ไม่มีช่วงก่อนหน้า', C.navy, C.goldL, v => Math.round(v) + '%');
+  s += panel(30 + pw + 20, py1, pw, ph, '% เสี่ยง+ผิดปกติ ราย Zone — เทียบช่วงก่อน', p2.s, p2.note);
+  /* 3) ราย Zone: % เสี่ยง vs % ผิดปกติ */
+  const p3 = vpairs(zs, zs.map(z => xStats(zc.get(z)).riskP), zs.map(z => xStats(zc.get(z)).abnP), pw, ph, '% มีความเสี่ยง', '% ผิดปกติ', C.amber, C.red, v => Math.round(v) + '%');
+  s += panel(30, py2, pw, ph, 'ราย Zone: % มีความเสี่ยง และ % ผิดปกติ', p3.s, p3.note);
+  /* 4) โดนัทสัดส่วนสถานะ + DC แย่สุด 3 */
+  const S = xStats(filteredData), nN = S.n - S.risk - S.abn, cx = 190, cy = ph / 2 + 6, r = Math.min(105, ph / 2 - 70);
+  let b4 = donut([{ v: nN, c: C.blue }, { v: S.risk, c: C.amber }, { v: S.abn, c: C.red }], cx, cy, r) +
+    `<text x="${cx}" y="${cy + 4}" font-size="30" font-weight="600" fill="${C.ink}" text-anchor="middle">${S.normP.toFixed(1)}%</text><text x="${cx}" y="${cy + 28}" font-size="14" fill="${C.muted}" text-anchor="middle">ปกติ</text>`;
+  [['ปกติ', nN, C.blue], ['มีความเสี่ยง', S.risk, C.amber], ['ผิดปกติ', S.abn, C.red]].forEach(([l, v, c], i) => { b4 += `<rect x="${cx - 130 + i * 92}" y="${ph - 34}" width="12" height="12" fill="${c}"/><text x="${cx - 112 + i * 92}" y="${ph - 24}" font-size="13" fill="${C.ink}">${l}</text>`; });
+  const worst = rankAll('bw_bad', 'DC').slice(-3).reverse();
+  b4 += `<text x="390" y="88" font-size="17" font-weight="600" fill="${C.ink}">DC แย่สุด 3 อันดับ (% เสี่ยง+ผิดปกติ)</text>`;
+  worst.forEach((o, i) => { const y = 124 + i * 62; b4 += `<rect x="390" y="${y}" width="${pw - 420}" height="50" rx="10" fill="#fdf1f3"/><text x="406" y="${y + 32}" font-size="20" font-weight="600" fill="${C.red}">${i + 1}</text><text x="436" y="${y + 23}" font-size="16" font-weight="600" fill="${C.ink}">${xe(cut(dcName(o.key), 24))}</text><text x="436" y="${y + 42}" font-size="13" fill="${C.muted}">${xe(dcZone(o.key))} · ${o.S.n.toLocaleString()} เที่ยว</text><text x="${pw - 46}" y="${y + 32}" font-size="20" font-weight="600" fill="${C.red}" text-anchor="end">${o.v.toFixed(1)}%</text>`; });
+  if (!worst.length) b4 += `<text x="390" y="130" font-size="15" fill="${C.muted}">ไม่มี DC ที่มีอย่างน้อย 20 เที่ยว</text>`;
+  s += panel(30 + pw + 20, py2, pw, ph, 'สัดส่วนสถานะเที่ยววิ่ง', b4, '');
+  /* ท้าย: หมายเหตุสูตร */
+  s += `<rect y="${H - 56}" width="${W}" height="56" fill="${C.navy}"/><rect y="${H - 56}" width="${W}" height="3" fill="${C.gold}"/>
+    <text x="30" y="${H - 22}" font-size="14" fill="#b9c9e6">สูตร: ส่วนต่างไมล์ = ไมล์ออกแรกสุดของวัน − ไมล์เข้าสูงสุดของวันก่อน · ติดลบ = ผิดปกติ · 1–10 กม. = เสี่ยง (ทะเบียนยกเว้น = ปกติ) · เทียบช่วงก่อนด้วยวันทำงาน จ.–ส. เท่ากัน · Zone แสดงครบทุก Zone</text>
+    <text x="${W - 30}" y="${H - 22}" font-size="14" fill="#b9c9e6" text-anchor="end">${xe(new Date().toLocaleString('th-TH'))}</text>`;
+  return { svg: wrap(W, H, s), W, H };
+}
+async function x169() { await assets(); saveBlob(stamp() + '-16x9.png', await toPng(compose169(), 2)); }
+
 /* ── ส่งออก ── */
 const keysPicked = () => XS.secs.map(s => s[0]).filter(k => XS.picked.has(k));
 function xMsg(t) { const m = document.getElementById('xMsg'); if (m) m.textContent = t; }
@@ -229,6 +349,14 @@ function xExcel() {
     else if (k === 'plate') T('ทะเบียนเสี่ยงสูงสุด', secPlate());
     else if (k === 'daily') add('รายวัน', [['วันที่', 'เที่ยว', 'เสี่ยง+ผิดปกติ'], ...secDaily().map(d => [d.d, d.n, d.bad])]);
     else if (k === 'vehicle') T('ชนิดรถ', secVehicle());
+    else if (BW_MET[k]) {
+      const out = [['ระดับ', 'อันดับ (ต่ำ=ดี)', 'ชื่อ', 'Zone', 'เที่ยว', BW_MET[k][0], 'ป้าย']];
+      [['DC', 5], ['Zone', 3]].forEach(([lv, w]) => {
+        const all = rankAll(k, lv), p = pickBW(all, w), b = new Set(p.best.map(o => o.key)), wv = new Set(p.worst.map(o => o.key));
+        all.forEach((o, i) => out.push([lv, i + 1, lv === 'DC' ? dcName(o.key) : o.key, lv === 'DC' ? dcZone(o.key) : '', o.S.n, +o.v.toFixed(2), b.has(o.key) ? 'ดีสุด' : wv.has(o.key) ? 'แย่สุด' : '']));
+      });
+      add(('ดี-แย่ ' + BW_MET[k][0].replace('% ', '')).replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31), out);
+    }
   }
   add('เที่ยววิ่ง', [['เลขที่ใบรายการ', 'วันที่ปล่อย', 'วันที่รับ', 'ทะเบียน', 'ชนิดรถ', 'ประเภทปล่อย', 'DC', 'Zone', 'กลุ่ม', 'ไมล์ออก', 'ไมล์เข้า', 'ระยะทาง', 'ส่วนต่างไมล์', 'สถานะรับรถ', 'ประเภทเที่ยว'],
     ...filteredData.map(r => [r.tripId, r.departDate, r.returnDate, r.plate, r.vehicleType, r.releaseType, r.dc, dcZone(r.dc), dcGroup(r.dc), r.mileOut, r.mileIn, Math.round(r.distance), r.mileDiff, r.dayStatus, r.tripStatus])]);
@@ -263,6 +391,7 @@ function openExport() {
       <button type="button" data-x="pptx">📑 PowerPoint<small>16:9 หนึ่งสไลด์ต่อหัวข้อ</small></button>
       <button type="button" data-x="png">🖼️ รูปยาว PNG<small>ทุกหัวข้อต่อกัน</small></button>
       <button type="button" data-x="a4">📄 อินโฟกราฟิก A4<small>2480×3508 พิมพ์ได้</small></button>
+      <button type="button" data-x="i169">🖥️ อินโฟกราฟิก 16:9<small>3840×2160 · ใช้ตัวกรองบนหน้า ไม่ต้องเลือกหัวข้อ</small></button>
       <button type="button" data-x="text">💬 ข้อความ LINE<small>คัดลอกสรุปพร้อมอีโมจิ</small></button>
       <button type="button" data-x="link">🔗 ลิงก์ผู้ชม<small>เปิดด้วยตัวกรองเดียวกัน</small></button>
     </div>
@@ -281,6 +410,7 @@ document.addEventListener('click', e => {
   else if (x === 'pptx') run(xPptx, ' PowerPoint ');
   else if (x === 'png') run(xPngLong, 'รูป PNG ');
   else if (x === 'a4') run(xA4, 'อินโฟกราฟิก A4 ');
+  else if (x === 'i169') { xMsg('⏳ กำลังสร้างอินโฟกราฟิก 16:9…'); x169().then(() => xMsg('✅ ดาวน์โหลดอินโฟกราฟิก 16:9 แล้ว'), e => xMsg('❌ ' + e.message)); }
   else if (x === 'text') xText();
   else if (x === 'link') { const url = location.origin + location.pathname + location.search; navigator.clipboard ? navigator.clipboard.writeText(url).then(() => xMsg('✅ คัดลอกลิงก์แล้ว'), () => xMsg(url)) : xMsg(url); }
 });

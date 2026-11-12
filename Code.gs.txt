@@ -1,7 +1,9 @@
 /** NIMEX Fleet Vehicle — Apps Script (วางใน Extensions > Apps Script ของ Google Sheet ใหม่ บันทึกเป็น Code.gs)
  *  Script Properties: ADMIN_KEY = รหัสผู้ดูแล (ห้ามเขียนรหัสลงไฟล์นี้)
  *  Deploy > New deployment > Web app > Execute as: Me · Who has access: Anyone → คัดลอก URL /exec ใส่ใน config.js
- *  แท็บ Rows, Exempt และ Log สร้างให้อัตโนมัติ
+ *  แท็บ Rows, Upload (พักข้อมูลระหว่างอัปโหลด), Exempt และ Log สร้างให้อัตโนมัติ
+ *  อัปโหลด: stage_begin → stage_append (ทีละ ≤3,000 แถว ลงแท็บ Upload) → stage_commit (รวมเข้า Rows ครั้งเดียว: เลขที่ใบรายการซ้ำ = ใช้ค่าใหม่, ใหม่ = ต่อท้าย)
+ *  ถ้าอัปโหลดขาดกลางทาง แท็บ Rows ไม่ถูกแตะ
  *  อัปเดตโค้ดนี้แล้ว: Deploy > Manage deployments > ✏️ แก้ไข > Version: New version > Deploy (ลิงก์ /exec เดิมใช้ต่อได้) */
 var COLS = ['tripId','departDate','returnDate','plate','vehicleType','dc','releaseType','distance','rawDistance',
   'mileOut','mileIn','dayStatus','mileDiff','tripStatus','route'];
@@ -15,6 +17,14 @@ function tab_(name, head) {
   return t;
 }
 function rowsTab_() { return tab_('Rows', COLS); }
+function upTab_() { return tab_('Upload', COLS); }
+function cleanRows_(rows) { return rows.map(function (r) { return COLS.map(function (c, i) { var v = r[i]; return v === null || v === undefined ? '' : v; }); }); }
+function writeRows_(t, start, rows) {
+  if (!rows.length) return;
+  TEXT_COLS.forEach(function (c) { t.getRange(start, COLS.indexOf(c) + 1, rows.length, 1).setNumberFormat('@'); });
+  t.getRange(start, 1, rows.length, COLS.length).setValues(rows);
+}
+function readRows_(t) { var n = t.getLastRow(); return n < 2 ? [] : t.getRange(2, 1, n - 1, COLS.length).getValues(); }
 var EX_HEAD = ['plate', 'note'];
 function exTab_() { return tab_('Exempt', EX_HEAD); }
 function settings_() {
@@ -74,6 +84,31 @@ function doPost(e) {
       log_('settings', ex.length + ' exempt plates');
       cacheClear_(); try { cachePut_(publicJson_()); } catch (x) {}
       return json_({ ok: true });
+    }
+    if (b.a === 'stage_begin') {         // เริ่มอัปโหลดใหม่: ล้างแท็บพัก (Rows ไม่ถูกแตะ)
+      var ut = upTab_(), un = ut.getLastRow(); if (un > 1) ut.getRange(2, 1, un - 1, COLS.length).clearContent();
+      return json_({ ok: true });
+    }
+    if (b.a === 'stage_append') {
+      var sr = b.rows || [];
+      if (!Array.isArray(sr) || sr.length > 3000) return json_({ ok: false, error: 'bad_rows' });
+      var u2 = upTab_(); writeRows_(u2, u2.getLastRow() + 1, cleanRows_(sr));
+      return json_({ ok: true, staged: u2.getLastRow() - 1 });
+    }
+    if (b.a === 'stage_commit') {        // รวมแท็บพักเข้า Rows ในครั้งเดียว · replace=true แทนที่ทั้งหมด (นำเข้าครั้งแรก)
+      var up = readRows_(upTab_());
+      if (b.expect && up.length !== b.expect) return json_({ ok: false, error: 'staged_' + up.length + '_of_' + b.expect });
+      var rt = rowsTab_(), cur = b.replace ? [] : readRows_(rt), idx = {}, added = 0, updated = 0;
+      cur.forEach(function (r, i) { idx[String(r[0])] = i; });
+      up.forEach(function (r) { var k = String(r[0]); if (k in idx) { cur[idx[k]] = r; updated++; } else { idx[k] = cur.length; cur.push(r); added++; } });
+      var old = rt.getLastRow() - 1;
+      writeRows_(rt, 2, cur);
+      if (old > cur.length) rt.getRange(cur.length + 2, 1, old - cur.length, COLS.length).clearContent();
+      var uc = upTab_(), ucn = uc.getLastRow(); if (ucn > 1) uc.getRange(2, 1, ucn - 1, COLS.length).clearContent();
+      PropertiesService.getScriptProperties().setProperty('UPDATED', new Date().toISOString());
+      log_(b.note || 'upload', 'new ' + added + ' · updated ' + updated + ' · total ' + cur.length);
+      cacheClear_(); try { cachePut_(publicJson_()); } catch (x) {}
+      return json_({ ok: true, total: cur.length, added: added, updated: updated });
     }
     var t = rowsTab_();
     if (b.a === 'begin') {               // replace everything: an upload replaces all trips (same as the original page)

@@ -36,12 +36,42 @@
       return o;
     });
   }
+  /* อัปโหลดแบบปลอดภัย: พักข้อมูลในแท็บ Upload แล้วรวมเข้า Rows ครั้งเดียว (Apps Script ใหม่)
+     ถ้า Apps Script ยังเป็นรุ่นเก่า (ไม่รู้จัก stage_*) จะใช้วิธีเดิม: ล้างแล้วเขียนทั้งหมด */
+  function pushStaged(objs, note, step, replace) {
+    var rows = toRows(objs), i = 0;
+    return api({ a: 'stage_begin' }).then(function next() {
+      if (i >= rows.length) return api({ a: 'stage_commit', note: note, expect: rows.length, replace: !!replace });
+      var part = rows.slice(i, i + 2500); i += part.length; if (step) step(i, rows.length);
+      return api({ a: 'stage_append', rows: part }).then(next);
+    });
+  }
   function pushAll(objs, note, step) {
     var rows = toRows(objs), i = 0;
     return api({ a: 'begin' }).then(function next() {
       if (i >= rows.length) return api({ a: 'finish', note: note });
       var part = rows.slice(i, i + 2500); i += part.length; if (step) step(i, rows.length);
       return api({ a: 'append', rows: part }).then(next);
+    });
+  }
+  function save(all, fresh, note, step, replace) {
+    return pushStaged(replace ? all : (fresh || all), note, step, replace).catch(function (e) {
+      if (e.message !== 'unknown') throw e;
+      return pushAll(all, note, step);          // Apps Script รุ่นเก่า
+    });
+  }
+  /* กล่องยืนยันในหน้า (แทน window.confirm ที่บางเบราว์เซอร์/หน้าต่างฝังไม่แสดง) */
+  function ask(title, lines, okText) {
+    return new Promise(function (res) {
+      var ov = document.createElement('div'); ov.className = 'modal-overlay open'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+      ov.innerHTML = '<div class="modal" style="max-width:480px"><h3></h3><ul style="margin:10px 0 14px 18px;font-size:14px;line-height:1.7"></ul><div class="modal-actions"><button class="action-btn" type="button" data-r="0">ยกเลิก</button><button class="action-btn primary" type="button" data-r="1"></button></div></div>';
+      ov.querySelector('h3').textContent = title; ov.querySelector('[data-r="1"]').textContent = okText;
+      var ul = ov.querySelector('ul'); lines.forEach(function (l) { var li = document.createElement('li'); li.textContent = l; ul.appendChild(li); });
+      function done(v) { ov.remove(); document.removeEventListener('keydown', key); res(v); }
+      function key(e) { if (e.key === 'Escape') done(false); }
+      ov.addEventListener('click', function (e) { var b = e.target.closest('[data-r]'); if (b) done(b.dataset.r === '1'); else if (e.target === ov) done(false); });
+      document.addEventListener('keydown', key);
+      document.body.appendChild(ov); ov.querySelector('[data-r="1"]').focus();
     });
   }
   function status(t) { var s = $('nx-status'); if (s) s.textContent = t; }
@@ -53,13 +83,18 @@
     if (!window.FV_ADMIN) return;
     var ds = rows.map(function (r) { return r.departDate; }).filter(Boolean).sort();
     info = info || {};
-    if (!window.confirm('ตรวจก่อนบันทึก\n\n• ไฟล์นี้ ' + (info.file || 0).toLocaleString() + ' เที่ยว — ใหม่ ' + (info.added || 0).toLocaleString() + ' · ทับค่าเดิม ' + (info.updated || 0).toLocaleString() +
-      '\n• รวมทั้งหมดหลังบันทึก ' + rows.length.toLocaleString() + ' เที่ยว\n• วันที่ปล่อยรถ ' + (ds[0] || '-') + ' ถึง ' + (ds[ds.length - 1] || '-') +
-      '\n\nเที่ยวที่เลขที่ใบรายการซ้ำจะใช้ค่าจากไฟล์ใหม่ เที่ยวใหม่ต่อท้ายข้อมูลเดิม\nบันทึกให้ผู้ชมทุกคนเห็นหรือไม่?')) { say('ยังไม่ได้บันทึก — ข้อมูลใหม่แสดงเฉพาะหน้านี้'); return; }
-    say('⏳ กำลังบันทึกลง Google Sheet…');
-    pushAll(rows, 'upload', function (n, all) { say('⏳ กำลังบันทึก ' + n.toLocaleString() + ' / ' + all.toLocaleString()); })
-      .then(function (r) { say('✅ บันทึกแล้ว ' + r.total.toLocaleString() + ' เที่ยว · ผู้ชมเห็นข้อมูลใหม่แล้ว'); stamp(new Date().toISOString()); })
-      .catch(function (e) { say('❌ บันทึกไม่สำเร็จ: ' + (e.message === 'denied' ? 'รหัสไม่ถูกต้อง' : e.message)); });
+    ask('ตรวจก่อนบันทึก', [
+      'ไฟล์นี้ ' + (info.file || 0).toLocaleString() + ' เที่ยว — ใหม่ ' + (info.added || 0).toLocaleString() + ' · ทับค่าเดิม ' + (info.updated || 0).toLocaleString(),
+      'รวมทั้งหมดหลังบันทึก ' + rows.length.toLocaleString() + ' เที่ยว',
+      'วันที่ปล่อยรถ ' + (ds[0] || '-') + ' ถึง ' + (ds[ds.length - 1] || '-'),
+      'เลขที่ใบรายการซ้ำใช้ค่าจากไฟล์ใหม่ เที่ยวใหม่ต่อท้ายข้อมูลเดิม — ผู้ชมทุกคนจะเห็นทันที'
+    ], 'บันทึก').then(function (ok) {
+      if (!ok) { say('ยังไม่ได้บันทึก — ข้อมูลใหม่แสดงเฉพาะหน้านี้'); return; }
+      say('⏳ กำลังบันทึกลง Google Sheet…');
+      save(rows, info.fresh, 'upload', function (n, all) { say('⏳ กำลังส่ง ' + n.toLocaleString() + ' / ' + all.toLocaleString()); })
+        .then(function (r) { say('✅ บันทึกแล้ว รวม ' + r.total.toLocaleString() + ' เที่ยว' + (r.added != null ? ' (ใหม่ ' + r.added.toLocaleString() + ' · ทับ ' + r.updated.toLocaleString() + ')' : '') + ' · ผู้ชมเห็นข้อมูลใหม่แล้ว'); stamp(new Date().toISOString()); })
+        .catch(function (e) { say('❌ บันทึกไม่สำเร็จ: ' + (e.message === 'denied' ? 'รหัสไม่ถูกต้อง' : e.message) + ' — ข้อมูลเดิมใน Sheet ยังอยู่ครบ ลองอัปโหลดใหม่ได้'); });
+    });
   };
 
   /* ผู้ดูแล: บันทึกทะเบียนยกเว้น + เกณฑ์แจ้งเตือนลง Google Sheet */
@@ -87,7 +122,7 @@
       e.target.files[0].text().then(function (t) {
         var d = JSON.parse(t), objs = fromRows(d.cols, d.rows);
         m.textContent = 'พบ ' + objs.length.toLocaleString() + ' เที่ยว กำลังบันทึก…';
-        return pushAll(objs, 'seed', function (n, all) { m.textContent = 'กำลังบันทึก ' + n.toLocaleString() + ' / ' + all.toLocaleString(); });
+        return save(objs, null, 'seed', function (n, all) { m.textContent = 'กำลังบันทึก ' + n.toLocaleString() + ' / ' + all.toLocaleString(); }, true);
       }).then(function (r) { m.textContent = 'นำเข้าแล้ว ' + r.total.toLocaleString() + ' เที่ยว'; setTimeout(function () { location.reload(); }, 700); })
         .catch(function (x) { m.textContent = 'นำเข้าไม่สำเร็จ: ' + x.message; });
     };

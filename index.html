@@ -1415,20 +1415,21 @@ function exportXLSX(){
   XLSX.writeFile(wb,`FleetData_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 // ── ผู้ดูแล: ตรวจเลขไมล์ (ระยะทาง 0 หรือเกิน 1,000 กม.) ──
+function mileCause(r){return !(r.mileOut>0)?'ไม่กรอกไมล์ออก':!(r.mileIn>0)?'ไม่กรอกไมล์เข้า':r.rawDistance>1000?'ระยะทางเกินจริง (>1,000 กม.)':'ระยะทาง 0';}
 function mileCheckRows(){return filteredData.filter(r=>!(r.rawDistance>0)||r.rawDistance>1000).sort((a,b)=>(b.rawDistance||0)-(a.rawDistance||0));}
 function renderMileCheck(){
   const box=document.getElementById('mileCheckBox');if(!box||!window.FV_ADMIN)return;
   const rows=mileCheckRows(),esc=v=>String(v??'-').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   document.getElementById('mileCheckCount').textContent=rows.length?`${rows.length.toLocaleString()} เที่ยว`:'';
   document.getElementById('mileCheckTable').innerHTML=!rows.length?'<div style="font-size:12px;color:var(--muted)">✅ ไม่พบระยะทางผิดปกติ</div>':
-    `<table class="drill-table"><thead><tr><th>เลขที่ใบรายการ</th><th>วันที่ปล่อย</th><th>ทะเบียน</th><th>DC</th><th>ไมล์ออก</th><th>ไมล์เข้า</th><th>ระยะทางในไฟล์</th><th>ใช้แทน</th><th>ปัญหา</th></tr></thead><tbody>`+
-    rows.slice(0,300).map(r=>`<tr><td class="mono">${esc(r.tripId)}</td><td>${esc(r.departDate)}</td><td style="cursor:pointer;text-decoration:underline" onclick="openDrill('plate','${esc(r.plate).replace(/'/g,"\\'")}')">${esc(r.plate)}</td><td>${esc((r.dc||'').replace(/^\d+\s+/,''))}</td><td class="mono">${fmt(r.mileOut)}</td><td class="mono">${fmt(r.mileIn)}</td><td class="mono" style="color:#b8334a;font-weight:700">${fmt(r.rawDistance||0)}</td><td class="mono">${fmt(r.distance)}</td><td style="font-size:10px">${r.rawDistance>1000?'เกิน 1,000 กม.':'ระยะทาง 0'}</td></tr>`).join('')+
+    `<table class="drill-table"><thead><tr><th>เลขที่ใบรายการ</th><th>วันที่ปล่อย</th><th>ทะเบียน</th><th>DC</th><th>ไมล์ออก</th><th>ไมล์เข้า</th><th>ระยะทางในไฟล์</th><th>ใช้แทน</th><th>สาเหตุ</th></tr></thead><tbody>`+
+    rows.slice(0,300).map(r=>`<tr><td class="mono">${esc(r.tripId)}</td><td>${esc(r.departDate)}</td><td style="cursor:pointer;text-decoration:underline" onclick="openDrill('plate','${esc(r.plate).replace(/'/g,"\\'")}')">${esc(r.plate)}</td><td>${esc((r.dc||'').replace(/^\d+\s+/,''))}</td><td class="mono">${fmt(r.mileOut)}</td><td class="mono">${fmt(r.mileIn)}</td><td class="mono" style="color:#b8334a;font-weight:700">${fmt(r.rawDistance||0)}</td><td class="mono">${fmt(r.distance)}</td><td style="font-size:11px">${mileCause(r)}</td></tr>`).join('')+
     `</tbody></table>`+(rows.length>300?`<div style="font-size:11px;color:var(--muted);margin-top:6px">แสดง 300 รายการแรก — กด Excel เพื่อดูทั้งหมด</div>`:'');
 }
 function exportMileCheck(){
   const rows=mileCheckRows();if(!rows.length)return;
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['เลขที่ใบรายการ','วันที่ปล่อย','วันที่รับ','ทะเบียน','ชนิดรถ','ประเภทปล่อย','DC','ไมล์ออก','ไมล์เข้า','ระยะทางในไฟล์','ระยะทางที่ใช้แทน','ปัญหา'],...rows.map(r=>[r.tripId,r.departDate,r.returnDate,r.plate,r.vehicleType,r.releaseType,r.dc,r.mileOut,r.mileIn,r.rawDistance,Math.round(r.distance),r.rawDistance>1000?'เกิน 1,000 กม.':'ระยะทาง 0'])]),'Mile Check');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['เลขที่ใบรายการ','วันที่ปล่อย','วันที่รับ','ทะเบียน','ชนิดรถ','ประเภทปล่อย','DC','ไมล์ออก','ไมล์เข้า','ระยะทางในไฟล์','ระยะทางที่ใช้แทน','สาเหตุ'],...rows.map(r=>[r.tripId,r.departDate,r.returnDate,r.plate,r.vehicleType,r.releaseType,r.dc,r.mileOut,r.mileIn,r.rawDistance,Math.round(r.distance),mileCause(r)])]),'Mile Check');
   XLSX.writeFile(wb,`MileCheck_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 function exportDCTable(){
@@ -1507,7 +1508,7 @@ function handleFileUpload(event){
       const sum=`ใหม่ ${added.toLocaleString()} · ทับค่าเดิม ${updated.toLocaleString()} · รวม ${allData.length.toLocaleString()} เที่ยว`;
       prog.textContent=`✅ อ่านไฟล์สำเร็จ ${fresh.size.toLocaleString()} เที่ยว (${sum})`;
       setStatus(`โหลดไฟล์ใหม่ ${sum}`);
-      if(window.fvSave)window.fvSave(allData,{file:fresh.size,added,updated}); /* ผู้ดูแล: บันทึกลง Google Sheet */
+      if(window.fvSave)window.fvSave(allData,{file:fresh.size,added,updated,fresh:[...fresh.values()]}); /* ผู้ดูแล: บันทึกลง Google Sheet */
     }catch(err){prog.textContent='❌ เกิดข้อผิดพลาด: '+err.message;}
   };reader.readAsBinaryString(file);
 }
@@ -1856,9 +1857,9 @@ function renderDrillAvgDist(subset){
 (function(){var o=setTheme;window.setTheme=setTheme=function(t){o(t);try{localStorage.setItem('nimex-fv-theme',t==='dark'?'dark':'light')}catch(e){}};
  try{var t=localStorage.getItem('nimex-fv-theme');if(t==='dark'){document.body.className='dark';document.getElementById('themeLbl').textContent='สว่าง';}}catch(e){}})();
 </script>
-<script src="views.js?v=5"></script>
-<script src="export.js?v=5"></script>
-<script src="config.js?v=5"></script>
-<script src="boot.js?v=5"></script>
+<script src="views.js?v=6"></script>
+<script src="export.js?v=6"></script>
+<script src="config.js?v=6"></script>
+<script src="boot.js?v=6"></script>
 </body>
 </html>

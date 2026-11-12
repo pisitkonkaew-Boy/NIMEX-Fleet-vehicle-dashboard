@@ -354,6 +354,43 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
 .nx-chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1}
 .nx-upd{margin-left:auto;font-size:12px;color:var(--muted)}
 .pct-sub .mom-badge{margin-left:6px;vertical-align:1px}
+/* analysis / settings / list */
+.an-ctl{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 10px}
+.an-ctl label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);flex:0 1 200px}
+.an-ctl select,.an-ctl input{padding:8px 10px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text);font:400 14px var(--font-main);min-height:38px}
+.an-ctl #anMin{width:110px}
+.an-info{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.an-t{width:100%;border-collapse:collapse;font-size:13px}
+.an-t td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.an-t th{padding:9px 10px;text-align:left;white-space:nowrap}
+.an-t .r{text-align:right;white-space:nowrap}
+.an-t .muted,.muted{color:var(--muted)}
+.an-t tr.click{cursor:pointer}
+.an-t tr.click:hover td,.an-t tr.click:focus td{background:rgba(212,175,55,.08)}
+.an-bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden}
+.an-bar i{display:block;height:100%;border-radius:99px}
+.an-empty{padding:22px;text-align:center;color:var(--muted)}
+.set-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.set-card{background:var(--card);border:1px solid var(--border);border-top:3px solid #d4af37;border-radius:14px;padding:16px;display:flex;gap:12px;align-items:flex-start}
+.set-ic{font-size:26px;line-height:1}
+.set-b{flex:1;min-width:0}
+.set-b h3{font-size:15px;font-weight:600;margin-bottom:4px;color:var(--text)}
+.set-b p{font-size:12.5px;color:var(--muted);line-height:1.5}
+.set-card .threshold-save{white-space:nowrap;align-self:center}
+#setBack{margin-bottom:12px}
+#setBack[hidden]{display:none}
+.set-sec .threshold-config{margin-bottom:14px}
+.set-sec .table-wrap{max-height:560px;overflow:auto}
+.ex-ck{width:18px;height:18px;cursor:pointer;accent-color:#0a2a5e}
+.x-modal{max-width:620px;width:calc(100% - 24px);max-height:90vh;overflow:auto}
+.x-secs{border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px}
+.x-secs legend{font-size:12px;color:var(--muted);padding:0 4px}
+.x-secs label{display:flex;gap:8px;align-items:center;font-size:13.5px;min-height:30px;cursor:pointer}
+.x-secs input{width:17px;height:17px;accent-color:#0a2a5e}
+.x-btns{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:8px;margin-top:12px}
+.x-btns button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font:600 14px var(--font-main);cursor:pointer;text-align:left;min-height:56px}
+.x-btns button small{font-weight:400;font-size:11.5px;color:var(--muted)}
+.x-btns button:hover,.x-btns button:focus-visible{border-color:#d4af37}
 .mom-badge{font-size:11px;font-weight:600}
 @media (max-width:899px){
   .top-bar.nx-top{padding:7px 12px;gap:6px 8px}
@@ -361,6 +398,9 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
   #segGroup button{padding:6px 12px}
   #segMode button{padding:6px 8px}
   .nx-acts .nx-ic span:not(.alert-badge){display:none}
+  .set-cards{grid-template-columns:1fr}
+  .an-ctl label{flex:1 1 140px}
+  .an-t{font-size:12px}
   .nx-filters{flex:1 1 100%;overflow-x:auto;scrollbar-width:none}
   .nx-filters::-webkit-scrollbar{display:none}
   .nx-filters select{flex:0 0 auto;max-width:190px}
@@ -382,9 +422,12 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
   <div class="nx-plate"><img src="logo.png" alt="NIMEX"></div>
   <div class="nx-rail-t">Fleet Vehicle<small>เที่ยววิ่งรถร่วม</small></div>
     <div class="btn-group" id="viewGroup">
-      <button class="active" onclick="setView('executive')">📊 ผู้บริหาร</button>
-      <button onclick="setView('team')">👥 ทีมงาน</button>
-      <button onclick="setView('trend')">📈 เทรนด์+วิเคราะห์</button>
+      <button class="active" data-v="executive" onclick="setView('executive')">📊 ผู้บริหาร</button>
+      <button data-v="team" onclick="setView('team')">👥 ทีมงาน</button>
+      <button data-v="trend" onclick="setView('trend')">📈 เทรนด์</button>
+      <button data-v="analysis" onclick="setView('analysis')">🔎 วิเคราะห์</button>
+      <button data-v="list" onclick="setView('list')">📋 รายการ</button>
+      <button data-v="settings" class="nx-admin-only" onclick="setView('settings')">⚙️ ตั้งค่า</button>
     </div>
   <a class="nx-hub" href="https://pisitkonkaew-boy.github.io/NIMEX-Fleet-Hub/">🏠 กลับ Hub</a>
 </aside>
@@ -406,9 +449,9 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
   </div>
   <div class="nx-acts">
     <button class="nx-ic nx-admin-only" onclick="openUploadModal()" title="เพิ่มข้อมูล" aria-label="เพิ่มข้อมูล">📁</button>
-    <button class="nx-ic" id="alertBtn" onclick="setView('trend');setTimeout(()=>document.getElementById('alertSection').scrollIntoView({behavior:'smooth'}),100)" title="แจ้งเตือน" aria-label="แจ้งเตือน">🔔<span class="alert-badge" id="alertCount">0</span></button>
+    <button class="nx-ic" id="alertBtn" onclick="showAlerts()" title="แจ้งเตือน" aria-label="แจ้งเตือน">🔔<span class="alert-badge" id="alertCount">0</span></button>
     <button class="nx-ic" id="themeBtn" onclick="setTheme(document.body.classList.contains('dark')?'light':'dark')" aria-label="สลับโหมดมืด/สว่าง"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span id="themeLbl">มืด</span></button>
-    <button class="nx-ic nx-admin-only" id="shareBtn" onclick="togglePop('sharePanel',this)" aria-expanded="false" aria-label="แชร์และส่งออก"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>แชร์</span></button>
+    <button class="nx-ic nx-admin-only" id="shareBtn" onclick="openExport()" aria-label="แชร์และส่งออก"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>แชร์</span></button>
   </div>
   <div class="nx-pop" id="morePanel" hidden>
     <div class="slicer-group"><label>🚗 ชนิดรถ</label><select id="filterVehicle" onchange="applyFilters()"><option value="">ทั้งหมด</option></select></div>
@@ -422,12 +465,6 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
       </select>
     </div>
     <button class="action-btn danger" onclick="resetFilters()">↺ ล้างตัวกรองทั้งหมด</button>
-  </div>
-  <div class="nx-pop nx-share" id="sharePanel" hidden>
-    <button type="button" onclick="copyShareLink()">🔗 คัดลอกลิงก์ (ผู้ชม + ตัวกรองที่เลือก)</button>
-    <button type="button" onclick="exportXLSX();closePops()">📊 Excel</button>
-    <button type="button" onclick="exportPNG();closePops()">🖼️ รูปภาพ PNG</button>
-    <span id="shareMsg"></span>
   </div>
 </div>
 
@@ -513,43 +550,6 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
 
     <div class="forecast-box" id="forecastBox"></div>
 
-    <!-- Alert Threshold Config -->
-    <div class="threshold-config" id="alertSection">
-      <h3>🔔 กำหนด Alert Threshold</h3>
-      <div class="threshold-row">
-        <label>จำนวนเที่ยวผิดปกติต่อ DC ต่อวัน (เกินนี้แจ้งเตือน)</label>
-        <input class="threshold-input" id="threshAbnDC" type="number" min="1" value="5">
-      </div>
-      <div class="threshold-row">
-        <label>จำนวนเที่ยวมีความเสี่ยงต่อ DC ต่อวัน (เกินนี้แจ้งเตือน)</label>
-        <input class="threshold-input" id="threshRiskDC" type="number" min="1" value="10">
-      </div>
-      <div class="threshold-row">
-        <label>% เที่ยวผิดปกติ+เสี่ยงรวม (เกินนี้แจ้งเตือน)</label>
-        <input class="threshold-input" id="threshPct" type="number" min="1" max="100" value="30">
-      </div>
-      <div class="threshold-row">
-        <label>รับรถข้ามวัน ต่อวัน (เกินนี้แจ้งเตือน)</label>
-        <input class="threshold-input" id="threshCross" type="number" min="1" value="20">
-      </div>
-      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-        <button class="threshold-save" onclick="saveThresholds()">💾 บันทึกและตรวจสอบ</button>
-        <span style="font-size:11px;color:var(--muted)" id="threshSaved"></span>
-      </div>
-      <div class="nx-admin-only" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-        <h3>🅿️ ทะเบียนยกเว้น — รถจอดที่สาขา ไม่ได้นำรถกลับบ้าน</h3>
-        <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px">ส่วนต่างไมล์ข้ามวัน 0–10 กม. ถือว่าปกติ (ถ้าติดลบยังนับเป็นผิดปกติ) · มีผลกับผู้ชมทุกคนทันที ไม่ต้องอัปโหลดไฟล์ใหม่</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <input class="threshold-input" id="exPlate" list="exPlateList" placeholder="ทะเบียน เช่น 3ฒข-1306" aria-label="ทะเบียน" style="width:170px;text-align:left">
-          <input class="threshold-input" id="exNote" placeholder="หมายเหตุ เช่น จอดสาขาเชียงใหม่" aria-label="หมายเหตุ" style="flex:1;min-width:180px;width:auto;text-align:left" onkeydown="if(event.key==='Enter')addExempt()">
-          <button class="threshold-save" onclick="addExempt()">➕ เพิ่ม</button>
-          <span style="font-size:11px;color:var(--muted)" id="exSaved"></span>
-        </div>
-        <datalist id="exPlateList"></datalist>
-        <div id="exList"></div>
-      </div>
-    </div>
-
     <!-- Risk DC + Plate Tables -->
     <div class="risk-tables" id="riskTablesRow">
       <div class="analysis-box" style="margin:0"><h3>⚠️ DC มีความเสี่ยง/ผิดปกติสูงสุด</h3><div id="riskDCTable"></div></div>
@@ -558,13 +558,13 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
 
     <!-- Analysis Issues -->
     <div class="analysis-box"><h3>🔍 การวิเคราะห์ปัญหาและข้อแนะนำ</h3><div class="issue-list" id="issueList"></div></div>
-    <div class="analysis-box nx-admin-only" id="mileCheckBox"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h3 style="margin:0">🛠️ ตรวจเลขไมล์ (เห็นเฉพาะผู้ดูแล) <span id="mileCheckCount" style="color:var(--red)"></span></h3><button class="action-btn green" style="padding:5px 11px;font-size:11px" onclick="exportMileCheck()">⬇️ Excel</button></div><div style="font-size:11px;color:var(--muted);margin-bottom:8px">ระยะทางในไฟล์เป็น 0 หรือเกิน 1,000 กม. — แดชบอร์ดใช้ค่าเฉลี่ยของทะเบียนแทน กรุณาตรวจการกรอกไมล์ออก/ไมล์เข้าในระบบต้นทาง</div><div id="mileCheckTable" style="max-height:340px;overflow:auto"></div></div>
   </div>
 
-  <!-- ══ BOTTOM DC TABLE ══ -->
-  <div class="bottom-section">
+  <!-- ══ LIST VIEW ══ -->
+  <div class="view" id="view-list">
+  <div class="bottom-section" style="margin-top:0">
     <div class="section-header">
-      <h2>📋 ข้อมูล DC รายละเอียด</h2>
+      <h2>📋 รายการเที่ยววิ่ง</h2>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
         <input class="dc-search" id="dcSearch" placeholder="🔍 ค้นหา DC / ทะเบียน / เส้นทาง..." oninput="renderDCTable()">
         <button class="action-btn green" onclick="exportDCTable()">⬇️ Export DC XLSX</button>
@@ -587,6 +587,90 @@ th{background:#0a2a5e!important;color:#fff!important;font-size:11.5px;font-weigh
       </table>
     </div>
     <div style="margin-top:7px;font-size:11px;color:var(--muted)" id="tableInfo"></div>
+  </div>
+  </div>
+
+  <!-- ══ ANALYSIS VIEW ══ -->
+  <div class="view" id="view-analysis">
+    <div class="analysis-box">
+      <h3>🔎 วิเคราะห์ — เลือกมิติและตัวชี้วัด เรียงจากแย่สุด</h3>
+      <div class="an-ctl">
+        <label>มิติ<select id="anDim" onchange="AN.dim=this.value;renderAnalysis()">
+          <option value="zone">Zone</option><option value="dc" selected>DC</option><option value="plate">ทะเบียนรถ</option>
+          <option value="vehicle">ชนิดรถ</option><option value="release">ประเภทการปล่อยรถ</option><option value="route">เส้นทาง</option></select></label>
+        <label>ตัวชี้วัด<select id="anMet" onchange="AN.met=this.value;renderAnalysis()">
+          <option value="bad" selected>% เสี่ยง+ผิดปกติ</option><option value="abn">% ผิดปกติ</option><option value="risk">% มีความเสี่ยง</option>
+          <option value="cross">% รับรถข้ามวัน</option><option value="avg">กม./เที่ยว</option><option value="trips">จำนวนเที่ยว</option><option value="dist">ระยะทางรวม</option></select></label>
+        <label id="anMinWrap">เที่ยวขั้นต่ำ<input type="number" id="anMin" min="1" value="20" onchange="AN.min=Math.max(1,+this.value||1);renderAnalysis()"></label>
+        <label style="flex:1 1 200px">ค้นหา<input type="search" id="anQ" placeholder="ชื่อ / Zone / DC" oninput="AN.q=this.value.trim();renderAnalysis()"></label>
+      </div>
+      <p class="an-info" id="anInfo"></p>
+      <div class="table-wrap" id="anTable"></div>
+    </div>
+  </div>
+
+  <!-- ══ SETTINGS VIEW (ผู้ดูแล) ══ -->
+  <div class="view nx-admin-only" id="view-settings">
+    <button type="button" class="action-btn" id="setBack" hidden onclick="openSet('')">‹ กลับหน้าตั้งค่า</button>
+    <div class="set-cards" id="setCards"></div>
+    <section class="set-sec" id="set-thresh" hidden>
+    <div class="threshold-config" id="alertSection">
+      <h3>🔔 กำหนด Alert Threshold</h3>
+      <div class="threshold-row">
+        <label>จำนวนเที่ยวผิดปกติต่อ DC ต่อวัน (เกินนี้แจ้งเตือน)</label>
+        <input class="threshold-input" id="threshAbnDC" type="number" min="1" value="5">
+      </div>
+      <div class="threshold-row">
+        <label>จำนวนเที่ยวมีความเสี่ยงต่อ DC ต่อวัน (เกินนี้แจ้งเตือน)</label>
+        <input class="threshold-input" id="threshRiskDC" type="number" min="1" value="10">
+      </div>
+      <div class="threshold-row">
+        <label>% เที่ยวผิดปกติ+เสี่ยงรวม (เกินนี้แจ้งเตือน)</label>
+        <input class="threshold-input" id="threshPct" type="number" min="1" max="100" value="30">
+      </div>
+      <div class="threshold-row">
+        <label>รับรถข้ามวัน ต่อวัน (เกินนี้แจ้งเตือน)</label>
+        <input class="threshold-input" id="threshCross" type="number" min="1" value="20">
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+        <button class="threshold-save" onclick="saveThresholds()">💾 บันทึกและตรวจสอบ</button>
+        <span style="font-size:11px;color:var(--muted)" id="threshSaved"></span>
+      </div>
+    </div>
+
+    </section>
+    <section class="set-sec" id="set-exempt" hidden>
+      <div class="threshold-config">
+        <h3>🅿️ ทะเบียนยกเว้น — รถจอดที่สาขา ไม่ได้นำรถกลับบ้าน</h3>
+        <p class="muted" style="font-size:12.5px;margin:-4px 0 10px">ติ๊กเพื่อยกเว้น: ส่วนต่างไมล์ข้ามวัน 0–10 กม. ถือว่าปกติ (ติดลบยังเป็นผิดปกติ) · เรียงตามจำนวนเที่ยวที่จะเปลี่ยนจาก "เสี่ยง" เป็น "ปกติ" · บันทึกให้ผู้ชมทุกคนทันที <span id="exSaved"></span></p>
+        <input type="search" class="threshold-input" placeholder="🔍 ค้นหาทะเบียน / DC" style="width:100%;max-width:360px;text-align:left;margin-bottom:10px" oninput="EX_Q=this.value.trim();renderExemptPicker()">
+        <div class="table-wrap" id="exPick"></div>
+      </div>
+      <div class="threshold-config">
+        <h3>➕ เพิ่มทะเบียนที่ไม่อยู่ในรายการ</h3>
+        <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px">ส่วนต่างไมล์ข้ามวัน 0–10 กม. ถือว่าปกติ (ถ้าติดลบยังนับเป็นผิดปกติ) · มีผลกับผู้ชมทุกคนทันที ไม่ต้องอัปโหลดไฟล์ใหม่</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input class="threshold-input" id="exPlate" list="exPlateList" placeholder="ทะเบียน เช่น 3ฒข-1306" aria-label="ทะเบียน" style="width:170px;text-align:left">
+          <input class="threshold-input" id="exNote" placeholder="หมายเหตุ เช่น จอดสาขาเชียงใหม่" aria-label="หมายเหตุ" style="flex:1;min-width:180px;width:auto;text-align:left" onkeydown="if(event.key==='Enter')addExempt()">
+          <button class="threshold-save" onclick="addExempt()">➕ เพิ่ม</button>
+          
+        </div>
+        <datalist id="exPlateList"></datalist>
+        <div id="exList"></div>
+      </div>
+    </section>
+    <section class="set-sec" id="set-mile" hidden>
+    <div class="analysis-box" id="mileCheckBox"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h3 style="margin:0">🛠️ ตรวจเลขไมล์ <span id="mileCheckCount" style="color:var(--red)"></span></h3><button class="action-btn green" style="padding:5px 11px;font-size:11px" onclick="exportMileCheck()">⬇️ Excel</button></div><div style="font-size:11px;color:var(--muted);margin-bottom:8px">ระยะทางในไฟล์เป็น 0 หรือเกิน 1,000 กม. — แดชบอร์ดใช้ค่าเฉลี่ยของทะเบียนแทน กรุณาตรวจการกรอกไมล์ออก/ไมล์เข้าในระบบต้นทาง</div><div id="mileCheckTable" style="max-height:340px;overflow:auto"></div></div>
+    </section>
+    <section class="set-sec" id="set-zone" hidden>
+      <div class="threshold-config"><h3>🗺️ จับภาค — DC → Zone (BKK = Zone BKK, Zone อื่น = UPC)</h3><div class="table-wrap" id="zoneTable"></div></div>
+    </section>
+    <section class="set-sec" id="set-data" hidden>
+      <div class="threshold-config"><h3>📁 ข้อมูลในระบบ</h3>
+        <p class="muted" style="font-size:12.5px;margin-bottom:10px">อัปโหลดไฟล์รายงาน NIMEX026001 — เลขที่ใบรายการซ้ำใช้ค่าใหม่ เที่ยวใหม่ต่อท้าย</p>
+        <button type="button" class="threshold-save" onclick="openUploadModal()" style="margin-bottom:12px">📁 อัปโหลดไฟล์ Excel</button>
+        <div class="table-wrap" id="dataInfo"></div></div>
+    </section>
   </div>
 </div>
 </div></div>
@@ -942,7 +1026,7 @@ function renderChips(){
   const esc=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const ci=compareInfo, out=[];
   if(ci){
-    out.push(`<span class="nx-chip nx-chip-p">📅 ${esc(rangeLabel(ci.cur.start,ci.cur.end))} <small>${ci.work} วันทำงาน</small></span>`);
+    out.push(`<span class="nx-chip nx-chip-p">📅 ${esc(rangeLabel(ci.cur.start,ci.cur.end))} <small>${ci.work?ci.work+' วันทำงาน':'วันหยุด (อา.)'}</small></span>`);
     out.push(ci.has?`<span class="nx-chip">เทียบกับ ${esc(rangeLabel(ci.prev.start,ci.prev.end))}</span>`
                    :`<span class="nx-chip nx-admin-only" style="color:var(--red)">ไม่มีข้อมูลช่วงก่อนหน้า (${esc(rangeLabel(ci.prev.start,ci.prev.end))}) — อัปโหลดเดือนก่อนเพื่อเปรียบเทียบ</span>`);
   }
@@ -996,7 +1080,7 @@ function filterSummary(){
 /* ── popover ── */
 function closePops(){ document.querySelectorAll('.nx-pop').forEach(p=>p.hidden=true); document.querySelectorAll('[aria-expanded]').forEach(b=>b.setAttribute('aria-expanded','false')); }
 function togglePop(id,btn){ const p=document.getElementById(id), open=p.hidden; closePops(); if(open){ p.hidden=false; btn.setAttribute('aria-expanded','true'); const sm=document.getElementById('shareMsg'); if(sm) sm.textContent=''; } }
-document.addEventListener('click',e=>{ if(!e.target.closest('.nx-pop')&&!e.target.closest('#moreBtn')&&!e.target.closest('#shareBtn')) closePops(); });
+document.addEventListener('click',e=>{ if(!e.target.closest('.nx-pop')&&!e.target.closest('#moreBtn')) closePops(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePops(); });
 document.addEventListener('click',e=>{
   const g=e.target.closest('#segGroup button'); if(g){ fGroup=g.dataset.g; document.getElementById('filterZone').value=''; document.getElementById('filterDC').value=''; populateSlicers(); applyFilters(); return; }
@@ -1012,6 +1096,7 @@ function renderAll() {
   renderTrend();
   renderDCTable();
   renderMileCheck();
+  if(typeof renderAnalysis==='function'){renderAnalysis();renderSettings();}
   checkAlerts(filteredData);
   setStatus(`แสดง ${filteredData.length.toLocaleString()} / ${allData.length.toLocaleString()} เที่ยว`);
 }
@@ -1090,8 +1175,8 @@ function renderExecutive() {
 
   // Daily charts
   const sortedDates = Object.keys(byDate).sort();
-  renderMiniLine('dailyTripsChart',sortedDates.map(getDateLabel),sortedDates.map(d=>byDate[d].length),'#1d57b8');
-  renderMiniLine('dailyDistChart',sortedDates.map(getDateLabel),sortedDates.map(d=>Math.round(byDate[d].reduce((s,r)=>s+(r.distance||0),0))),'#123f8c');
+  renderMiniLine('dailyTripsChart',sortedDates.map(getDateLabel),sortedDates.map(d=>byDate[d].length),'#1d57b8',sortedDates);
+  renderMiniLine('dailyDistChart',sortedDates.map(getDateLabel),sortedDates.map(d=>Math.round(byDate[d].reduce((s,r)=>s+(r.distance||0),0))),'#123f8c',sortedDates);
 }
 
 function bigPctRow(p,color,label,sub,onclick=''){
@@ -1113,9 +1198,10 @@ function togglePanel(id){
   if(t)t.classList.toggle('open',!open);
 }
 
-function renderMiniLine(id,labels,data,color){
+function renderMiniLine(id,labels,data,color,dates){
   destroyChart(id);
   charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels,datasets:[{data,borderColor:color,backgroundColor:color+'18',fill:true,tension:.4,pointRadius:3}]},options:chartOpts()});
+  if(dates)charts[id].$dates=dates; /* คลิกจุด → เปิดวันนั้น (views.js) */
 }
 
 // ═══════════════════════════════════════════
@@ -1144,6 +1230,7 @@ function renderTeam(){
     {label:'เสี่ยง',data:sortedDates.map(d=>byDate[d].filter(r=>r.tripStatus==='เที่ยววิ่งมีความเสี่ยง').length),borderColor:'#b8860b',backgroundColor:'rgba(184,134,11,.1)',fill:true,tension:.4,pointRadius:3},
     {label:'ผิดปกติ',data:sortedDates.map(d=>byDate[d].filter(r=>r.tripStatus==='เที่ยววิ่งผิดปกติ').length),borderColor:'#b8334a',backgroundColor:'rgba(184,51,74,.1)',fill:true,tension:.4,pointRadius:3},
   ]},options:chartOpts({plugins:{legend:{display:true,position:'bottom',labels:{color:getCSS('--text'),font:{size:11}}}}})});
+  charts['lineChart'].$dates=sortedDates;
 
   const dcTrips=Object.entries(byDC).map(([dc,trips])=>({dc:dc.replace(/^\d+\s+/,''),trips:trips.length})).sort((a,b)=>b.trips-a.trips).slice(0,10);
   destroyChart('top10Chart');
@@ -1184,6 +1271,7 @@ function renderTrend(){
     {label:'เสี่ยง',data:sortedDates.map(d=>byDate[d].filter(r=>r.tripStatus==='เที่ยววิ่งมีความเสี่ยง').length),borderColor:'#b8860b',backgroundColor:'rgba(184,134,11,.1)',fill:true,tension:.4,pointRadius:4},
     {label:'ผิดปกติ',data:sortedDates.map(d=>byDate[d].filter(r=>r.tripStatus==='เที่ยววิ่งผิดปกติ').length),borderColor:'#b8334a',backgroundColor:'rgba(184,51,74,.1)',fill:true,tension:.4,pointRadius:4},
   ]},options:chartOpts({plugins:{legend:{display:true,position:'top',labels:{color:getCSS('--text'),font:{size:11}}}}})});
+  charts['trendTripTypeChart'].$dates=sortedDates;
 
   // Vehicle type trend
   destroyChart('trendVehicleChart');
@@ -1191,6 +1279,7 @@ function renderTrend(){
     {label:'040 รถปิกอัพ',data:sortedDates.map(d=>byDate[d].filter(r=>r.vehicleType==='040  รถปิกอัพ').length),backgroundColor:'#2f8f8f',borderRadius:4},
     {label:'042 รถควบคุมอุณหภูมิ',data:sortedDates.map(d=>byDate[d].filter(r=>r.vehicleType==='042  รถควบคุมอุณหภูมิ4W').length),backgroundColor:'#6e93d6',borderRadius:4},
   ]},options:chartOpts({plugins:{legend:{display:true,position:'top',labels:{color:getCSS('--text'),font:{size:11}}}}})});
+  charts['trendVehicleChart'].$dates=sortedDates;
 
   // Forecast 26 days
   const WDAYS=26;
@@ -1261,7 +1350,7 @@ function sortTable(k){sortDir=sortKey===k?sortDir*-1:1;sortKey=k;renderDCTable()
 //  THEME / VIEW
 // ═══════════════════════════════════════════
 function setTheme(t){if(t!=='dark')t='light';document.body.className=t;const l=document.getElementById('themeLbl');if(l)l.textContent=t==='dark'?'สว่าง':'มืด';if(window.Chart){Chart.defaults.color=t==='dark'?'#a3b4d0':'#55657f';Chart.defaults.borderColor=t==='dark'?'#22395f':'#dbe3f0';}setTimeout(renderAll,60);}
-function setView(v){document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));document.getElementById('view-'+v).classList.add('active');document.querySelectorAll('#viewGroup button').forEach((b,i)=>b.classList.toggle('active',['executive','team','trend'][i]===v));}
+function setView(v){if(v==='settings'&&!window.FV_ADMIN)v='executive';document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));document.getElementById('view-'+v).classList.add('active');document.querySelectorAll('#viewGroup button').forEach(b=>{b.classList.toggle('active',b.dataset.v===v);b.setAttribute('aria-current',b.dataset.v===v?'page':'false');});if(v==='settings'&&typeof openSet==='function')openSet('');else if(v==='analysis'&&typeof renderAnalysis==='function')renderAnalysis();}
 
 // ═══════════════════════════════════════════
 //  PNG EXPORT (canvas-rendered KPI image)
@@ -1767,7 +1856,9 @@ function renderDrillAvgDist(subset){
 (function(){var o=setTheme;window.setTheme=setTheme=function(t){o(t);try{localStorage.setItem('nimex-fv-theme',t==='dark'?'dark':'light')}catch(e){}};
  try{var t=localStorage.getItem('nimex-fv-theme');if(t==='dark'){document.body.className='dark';document.getElementById('themeLbl').textContent='สว่าง';}}catch(e){}})();
 </script>
-<script src="config.js?v=4"></script>
-<script src="boot.js?v=4"></script>
+<script src="views.js?v=5"></script>
+<script src="export.js?v=5"></script>
+<script src="config.js?v=5"></script>
+<script src="boot.js?v=5"></script>
 </body>
 </html>
